@@ -5,7 +5,7 @@
 This is a stack-based, multi-pass, bytecode interpreter written in Rust for a programming language called Hinton. The project is an extension of the code found in the book [Crafting Interpreters](https://craftinginterpreters.com/) by Bob Nystrom.
 
 ## Features
-Though this interpreter is based on the Crafting Interpreters book, it implements many things differently. Here are some of the differences between Hinton and Lox, as well as some of the features Hinton has that Lox does not have:
+Though this interpreter is based on the Crafting Interpreters book, it implements many things differently. Here are some of the differences between Hinton and the language developed in the book (Lox):
 
 * Hinton source code is first parsed into an Abstract Syntax Tree (AST), then compiled to bytecode, then interpreted by the VM. This is because traversing the AST allows for easier bytecode generation and optimization (optimization strategies will be added later).
 
@@ -107,27 +107,27 @@ while x <= 10 {
 **Bytecode**
 ```
 ==== <File '/path/to/file.ht'> ====
-001     0000 0x11 – LOAD_IMM_0I                
- |      0001 0x2E – DEFINE_GLOBAL              0 -> 'x'
-003     0003 0x2F – GET_GLOBAL                 0 -> 'x'
- |      0005 0x27 – LOAD_IMM_N                 10
- |      0007 0x0F – LESS_THAN_EQ               
- |      0008 0x3B – POP_JUMP_IF_FALSE          31 (add 20 to IP)
-004     0011 0x26 – LOAD_CONSTANT              1 -> (print)
- |      0013 0x17 – LOAD_NATIVE                
- |      0014 0x26 – LOAD_CONSTANT              2 -> (X equals )
- |      0016 0x2F – GET_GLOBAL                 0 -> 'x'
- |      0018 0x00 – ADD                        
- |      0019 0x23 – FUNC_CALL                  1
-003     0021 0x20 – POP_STACK_TOP              
-005     0022 0x2F – GET_GLOBAL                 0 -> 'x'
- |      0024 0x13 – LOAD_IMM_1I                
- |      0025 0x00 – ADD                        
- |      0026 0x30 – SET_GLOBAL                 0 -> 'x'
-004     0028 0x20 – POP_STACK_TOP              
-003     0029 0x28 – LOOP_JUMP                  3 (sub 28 from IP)
-000     0031 0x15 – LOAD_IMM_NULL              
- |      0032 0x2C – RETURN                     0
+00001   00000 0x11 – LOAD_IMM_0I                
+  |     00001 0x2F – DEFINE_GLOBAL              0 -> 'x'
+00003   00003 0x30 – GET_GLOBAL                 0 -> 'x'
+  |     00005 0x29 – LOAD_IMM_N                 10
+  |     00007 0x0F – LESS_THAN_EQ               
+  |     00008 0x3F – POP_JUMP_IF_FALSE          33 (add 22 to IP)
+00004   00011 0x28 – LOAD_CONSTANT              1 -> (print)
+  |     00013 0x17 – LOAD_NATIVE                
+  |     00014 0x28 – LOAD_CONSTANT              2 -> (X equals )
+  |     00016 0x30 – GET_GLOBAL                 0 -> 'x'
+  |     00018 0x00 – ADD                        
+  |     00019 0x25 – FUNC_CALL                  1
+00003   00021 0x20 – POP_STACK_TOP              
+00005   00022 0x30 – GET_GLOBAL                 0 -> 'x'
+  |     00024 0x13 – LOAD_IMM_1I                
+  |     00025 0x00 – ADD                        
+  |     00026 0x31 – SET_GLOBAL                 0 -> 'x'
+00004   00028 0x20 – POP_STACK_TOP              
+00006   00029 0x2D – POP_STACK_N                0
+00003   00031 0x2A – LOOP_JUMP                  3 (sub 30 from IP)
+00000   00033 0x22 – END_VIRTUAL_MACHINE
 ```
 
 And to see the raw bytes, run the file with the `show_raw_bytecode` flag:
@@ -137,11 +137,11 @@ cargo run --features show_raw_bytecode </path/to/program.ht>
 Which, for the above program, results in the following chunk of bytes:
 ```
 ==== <File '/path/to/file.ht'> ====
-0x11 0x2E 0x00 0x2F 0x00 0x27 0x0A 0x0F 
-0x3B 0x00 0x14 0x26 0x01 0x17 0x26 0x02 
-0x2F 0x00 0x00 0x23 0x01 0x20 0x2F 0x00 
-0x13 0x00 0x30 0x00 0x20 0x28 0x1C 0x15 
-0x2C 0x00 
+0x11 0x2F 0x00 0x30 0x00 0x29 0x0A 0x0F 
+0x3F 0x00 0x16 0x28 0x01 0x17 0x28 0x02 
+0x30 0x00 0x00 0x25 0x01 0x20 0x30 0x00 
+0x13 0x00 0x31 0x00 0x20 0x2D 0x00 0x2A 
+0x1E 0x22 
 
 Chunk Size: 34
 ================
@@ -149,9 +149,7 @@ Chunk Size: 34
 
 ## Missing Features
 As mentioned before, Hinton is a work in progress. And as a matter of fact, I am only in [Chapter #25](https://craftinginterpreters.com/closures.html) of the Crafting Interpreters book. After adding functions and calls, the chapters of the book that follow become a lot more complex and harder to translate to Rust code that can work with the current implementation of Hinton. Because of this, I am trying to add as many smaller features as possible and improve the three components of the interpreter before moving on. However, I cannot assure you that those remaining features will be added anytime soon. Here is a list of features that Hinton is currently missing and that may take longer to be added:
-* Function Closures
-    * Accessing variables outside of functions.
-    * Lambda expressions.
+* Lambda expressions.
 * Garbage Collection
 * Classes & Inheritance
 * Importing Modules
@@ -163,4 +161,3 @@ Because accessing class members is similar to accessing dictionary members, Hint
 
 ## Contributing
 Because I am creating Hinton to learn about compiler/interpreter design and programming language implementation, I will not be accepting any pull requests that add any of the above *missing features* to Hinton (I want to learn how to do it myself). However, any other contributions that improve the current state of the interpreter are welcomed. For a list of planned features or issues to which you can contribute visit the [Planned Features](https://github.com/hinton-lang/Hinton/projects/1) or [Issues](https://github.com/hinton-lang/Hinton/issues) page.
-
