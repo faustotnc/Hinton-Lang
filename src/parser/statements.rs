@@ -85,11 +85,11 @@ impl Parser {
     /// ## Returns
     /// `Option<ASTNode>` – The block statement's AST node.
     fn parse_block(&mut self) -> Option<ASTNode> {
-        let mut statements = BlockNode { body: vec![] };
+        let mut body: Vec<ASTNode> = vec![];
 
         while !self.check(&R_CURLY) && !self.check(&EOF) {
             match self.parse_declaration() {
-                Some(val) => statements.body.push(val),
+                Some(val) => body.push(val),
                 // Report parse error if node has None value
                 None => return None,
             }
@@ -97,7 +97,14 @@ impl Parser {
 
         self.consume(&R_CURLY, "Expect '}' after block.");
 
-        return Some(BlockStmt(statements));
+        return Some(BlockStmt(BlockNode {
+            body,
+            end_of_block: self.previous.clone(),
+            // If the block is, indeed, a function body,
+            // the `parse_func_declaration(...)` method
+            // will change this to true.
+            is_func_body: false,
+        }));
     }
 
     /// Parses a variable declaration as specified in the grammar.bnf file.
@@ -373,9 +380,28 @@ impl Parser {
 
         self.consume(&L_CURLY, "Expected '{' braces before function body.");
 
-        let body = match self.parse_block() {
+        let mut body = match self.parse_block() {
             Some(b) => b,
             None => return None,
+        };
+
+        // Checks if the last statement in the function's block is a return statement.
+        // if it is, we don't emit an extra return at compile time.
+        let ends_with_return = match &mut body {
+            BlockStmt(b) => {
+                b.is_func_body = true;
+
+                if b.body.len() > 0 {
+                    if let ReturnStmt(_) = b.body.last().unwrap() {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            _ => unreachable!("Should have parsed a block statement."),
         };
 
         return Some(FunctionDecl(FunctionDeclNode {
@@ -384,6 +410,7 @@ impl Parser {
             min_arity,
             max_arity,
             body: Box::new(body),
+            ends_with_return,
         }));
     }
 

@@ -186,6 +186,8 @@ pub struct ConstantDeclNode {
 #[derive(Clone)]
 pub struct BlockNode {
     pub body: Vec<ASTNode>,
+    pub is_func_body: bool,
+    pub end_of_block: Token,
 }
 
 #[derive(Clone)]
@@ -224,6 +226,7 @@ pub struct FunctionDeclNode {
     pub min_arity: u8,
     pub max_arity: u8,
     pub body: Box<ASTNode>,
+    pub ends_with_return: bool,
 }
 
 #[derive(Clone)]

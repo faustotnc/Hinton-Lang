@@ -1,5 +1,5 @@
-use super::{symbols::Symbol, Compiler, CompilerErrorType};
-use crate::{ast::*, bytecode::OpCode, compiler::symbols::SymbolLoc, lexer::tokens::Token, objects::Object};
+use super::{Compiler, CompilerErrorType};
+use crate::{ast::*, bytecode::OpCode, compiler::symbols::SL, lexer::tokens::Token, objects::Object};
 
 impl Compiler {
     /// Compiles a literal expression.
@@ -22,11 +22,9 @@ impl Compiler {
             // Compile integer literals with the immediate instruction when possible
             Object::Int(x) if x > 1i64 => {
                 if x < 256i64 {
-                    self.emit_op_code(OpCode::LoadImmN, opr_pos);
-                    self.emit_raw_byte(x as u8, opr_pos);
+                    self.emit_op_code_with_byte(OpCode::LoadImmN, x as u8, opr_pos);
                 } else if x < (u16::MAX as i64) {
-                    self.emit_op_code(OpCode::LoadImmNLong, opr_pos);
-                    self.emit_short(x as u16, opr_pos);
+                    self.emit_op_code_with_short(OpCode::LoadImmNLong, x as u16, opr_pos);
                 } else {
                     // If the number cannot be encoded within two bytes (as an unsigned short),
                     // then we add it to the constant pool.
@@ -148,12 +146,8 @@ impl Compiler {
     /// # Arguments
     /// * `expr` – An identifier expression node.
     pub(super) fn compile_identifier_expr(&mut self, expr: &IdentifierExprNode) {
-        match self.resolve_symbol(&expr.token, false) {
-            SymbolLoc::Global(g, p) | SymbolLoc::Local(g, p) => {
-                self.named_variable(&(g, p), &expr.token, false)
-            }
-            _ => {}
-        }
+        let res = self.resolve_symbol(&expr.token, false);
+        self.named_variable(&res, &expr.token, false);
     }
 
     /// Emits the appropriate opcode to get or set either a local or global variable.
@@ -162,36 +156,54 @@ impl Compiler {
     /// * `symbol` – The symbol and its location.
     /// * `token` – A reference to the token associated with this symbol.
     /// * `to_set` – Whether or not to emit reassignment instructions.
-    fn named_variable(&mut self, symbol: &(Symbol, usize), token: &Token, to_set: bool) {
+    fn named_variable(&mut self, symbol_loc: &SL, token: &Token, to_set: bool) {
         let pos = (token.line_num, token.column_num);
 
         let op_name;
         let op_name_long;
+        let idx: usize;
 
-        if symbol.0.is_global {
-            if to_set {
-                op_name = OpCode::SetGlobal;
-                op_name_long = OpCode::SetGlobalLong;
-            } else {
-                op_name = OpCode::GetGlobal;
-                op_name_long = OpCode::GetGlobalLong;
+        match symbol_loc {
+            SL::Global(_, p) => {
+                idx = *p;
+
+                if to_set {
+                    op_name = OpCode::SetGlobal;
+                    op_name_long = OpCode::SetGlobalLong;
+                } else {
+                    op_name = OpCode::GetGlobal;
+                    op_name_long = OpCode::GetGlobalLong;
+                }
             }
-        } else {
-            if to_set {
-                op_name = OpCode::SetLocal;
-                op_name_long = OpCode::SetLocalLong;
-            } else {
-                op_name = OpCode::GetLocal;
-                op_name_long = OpCode::GetLocalLong;
+            SL::Local(_, p) => {
+                idx = *p;
+
+                if to_set {
+                    op_name = OpCode::SetLocal;
+                    op_name_long = OpCode::SetLocalLong;
+                } else {
+                    op_name = OpCode::GetLocal;
+                    op_name_long = OpCode::GetLocalLong;
+                }
             }
+            SL::UpValue(_, p) => {
+                idx = *p;
+
+                if to_set {
+                    op_name = OpCode::SetUpVal;
+                    op_name_long = OpCode::SetUpValLong;
+                } else {
+                    op_name = OpCode::GetUpVal;
+                    op_name_long = OpCode::GetUpValLong;
+                }
+            }
+            _ => return,
         }
 
-        if symbol.1 < 256 {
-            self.emit_op_code(op_name, pos);
-            self.emit_raw_byte(symbol.1 as u8, pos);
+        if idx < 256 {
+            self.emit_op_code_with_byte(op_name, idx as u8, pos);
         } else {
-            self.emit_op_code(op_name_long, pos);
-            self.emit_short(symbol.1 as u16, pos);
+            self.emit_op_code_with_short(op_name_long, idx as u16, pos);
         }
     }
 
@@ -200,42 +212,45 @@ impl Compiler {
     /// # Arguments
     /// * `expr` – A variable reassignment expression node.
     pub(super) fn compile_var_reassignment_expr(&mut self, expr: &VarReassignmentExprNode) {
-        match self.resolve_symbol(&expr.target, false) {
-            SymbolLoc::Global(s, p) | SymbolLoc::Local(s, p) => {
-                let symbol = &(s, p);
-                let line_info = (expr.target.line_num, expr.target.column_num);
+        let line_info = (expr.target.line_num, expr.target.column_num);
 
-                if let ReassignmentType::None = expr.opr_type {
-                    // Proceed to directly reassign the variable.
-                    self.compile_node(&expr.value);
-                } else {
-                    // The expression `a /= 2` expands to `a = a / 2`, so we
-                    // must get the variable's value onto the stack first.
-                    self.named_variable(symbol, &expr.target, false);
+        let res = match self.resolve_symbol(&expr.target, false) {
+            SL::Global(s, p) => SL::Global(s, p),
+            SL::Local(s, p) => SL::Local(s, p),
+            SL::UpValue(u, p) => SL::UpValue(u, p),
+            _ => return,
+        };
 
-                    self.compile_node(&expr.value);
+        if let ReassignmentType::None = expr.opr_type {
+            // Proceed to directly reassign the variable.
+            self.compile_node(&expr.value);
+        } else {
+            // The expression `a /= 2` expands to `a = a / 2`, so we
+            // must get the variable's value onto the stack first.
+            self.named_variable(&res, &expr.target, false);
 
-                    match expr.opr_type {
-                        ReassignmentType::Plus => self.emit_op_code(OpCode::Add, line_info),
-                        ReassignmentType::Minus => self.emit_op_code(OpCode::Subtract, line_info),
-                        ReassignmentType::Div => self.emit_op_code(OpCode::Divide, line_info),
-                        ReassignmentType::Mul => self.emit_op_code(OpCode::Multiply, line_info),
-                        ReassignmentType::Expo => self.emit_op_code(OpCode::Expo, line_info),
-                        ReassignmentType::Mod => self.emit_op_code(OpCode::Modulus, line_info),
-                        ReassignmentType::ShiftL => self.emit_op_code(OpCode::BitwiseShiftLeft, line_info),
-                        ReassignmentType::ShiftR => self.emit_op_code(OpCode::BitwiseShiftRight, line_info),
-                        ReassignmentType::BitAnd => self.emit_op_code(OpCode::BitwiseAnd, line_info),
-                        ReassignmentType::Xor => self.emit_op_code(OpCode::BitwiseXor, line_info),
-                        ReassignmentType::BitOr => self.emit_op_code(OpCode::BitwiseOr, line_info),
-                        ReassignmentType::None => {}
-                    };
-                }
+            // Then we push the other operand's value onto the stack
+            self.compile_node(&expr.value);
 
-                // Sets the new value (which will be on top of the stack)
-                self.named_variable(symbol, &expr.target, true);
-            }
-            _ => {}
+            // Then compute the operation of the two operands.
+            match expr.opr_type {
+                ReassignmentType::Plus => self.emit_op_code(OpCode::Add, line_info),
+                ReassignmentType::Minus => self.emit_op_code(OpCode::Subtract, line_info),
+                ReassignmentType::Div => self.emit_op_code(OpCode::Divide, line_info),
+                ReassignmentType::Mul => self.emit_op_code(OpCode::Multiply, line_info),
+                ReassignmentType::Expo => self.emit_op_code(OpCode::Expo, line_info),
+                ReassignmentType::Mod => self.emit_op_code(OpCode::Modulus, line_info),
+                ReassignmentType::ShiftL => self.emit_op_code(OpCode::BitwiseShiftLeft, line_info),
+                ReassignmentType::ShiftR => self.emit_op_code(OpCode::BitwiseShiftRight, line_info),
+                ReassignmentType::BitAnd => self.emit_op_code(OpCode::BitwiseAnd, line_info),
+                ReassignmentType::Xor => self.emit_op_code(OpCode::BitwiseXor, line_info),
+                ReassignmentType::BitOr => self.emit_op_code(OpCode::BitwiseOr, line_info),
+                ReassignmentType::None => {}
+            };
         }
+
+        // Sets the new value (which will be on top of the stack)
+        self.named_variable(&res, &expr.target, true);
     }
 
     /// Compiles an array literal expression.
@@ -254,11 +269,9 @@ impl Compiler {
             }
 
             if expr.values.len() < 256 {
-                self.emit_op_code(OpCode::MakeArray, line_info);
-                self.emit_raw_byte(expr.values.len() as u8, line_info);
+                self.emit_op_code_with_byte(OpCode::MakeArray, expr.values.len() as u8, line_info);
             } else {
-                self.emit_op_code(OpCode::MakeArrayLong, line_info);
-                self.emit_short(expr.values.len() as u16, line_info);
+                self.emit_op_code_with_short(OpCode::MakeArrayLong, expr.values.len() as u16, line_info);
             }
         } else {
             self.error_at_token(

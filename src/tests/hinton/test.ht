@@ -63,3 +63,64 @@ assert_eq(next(string_iter), "Y");
 assert_eq(next(string_iter), "o");
 assert_eq(next(string_iter), "r");
 assert_eq(next(string_iter), "k");
+
+
+// Test accessing and modifying variables
+// from within the scope of a child function.
+func outer() {
+  let x = "old value";
+
+  func middle() {
+      assert_eq(x, "old value");
+
+      func inner() {
+          assert_eq(x, "old value");
+          x = "new value";
+          assert_eq(x, "new value");
+      }
+
+      assert_eq(x, "old value");
+      inner();
+      assert_eq(x, "new value");
+  }
+
+  assert_eq(x, "old value");
+  middle();
+  assert_eq(x, "new value");
+}
+
+outer();
+
+
+// Test closures
+func func_with_closure() {
+  let a = "initial";
+
+  func set(k) { a = k; }
+  func get() { return a; }
+
+  return (set, get);
+}
+
+let called_func_with_closure = func_with_closure();
+
+// Accesses the inner functions
+let setter = called_func_with_closure[0];
+let getter = called_func_with_closure[1];
+
+assert_eq(getter(), "initial");
+
+setter("value 1");
+assert_eq(getter(), "value 1");
+
+setter("some new value");
+assert_eq(getter(), "some new value");
+
+
+// Test for-in loops and array subscripting
+let title_tags = ["h1", "h2", "h3", "h4", "h5", "h6"];
+let tag_index = 0;
+for let tag in title_tags {
+    assert_eq(tag, title_tags[tag_index]);
+    tag_index += 1;
+}

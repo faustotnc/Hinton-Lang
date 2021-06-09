@@ -1,8 +1,10 @@
+use std::{cell::RefCell, rc::Rc};
+
 use super::{RuntimeErrorType, RuntimeResult, VirtualMachine};
 use crate::{
     bytecode::OpCode,
     natives::{self, get_next_in_iter, iter_has_next, make_iter},
-    objects::{Object, RangeObject},
+    objects::{ClosureObject, Object, RangeObject, UpValRef},
 };
 
 impl<'a> VirtualMachine {
@@ -15,22 +17,6 @@ impl<'a> VirtualMachine {
     pub(crate) fn run(&mut self) -> RuntimeResult {
         while let Some(instruction) = self.get_next_op_code() {
             match instruction {
-                OpCode::PopStackTop => {
-                    self.pop_stack();
-                }
-
-                OpCode::PopStackN | OpCode::PopStackNLong => {
-                    let n = if let OpCode::PopStackN = instruction {
-                        self.get_next_byte().unwrap() as i64
-                    } else {
-                        self.get_next_short().unwrap() as i64
-                    };
-
-                    for _ in 0..n {
-                        self.pop_stack();
-                    }
-                }
-
                 OpCode::LoadImmNull => self.push_stack(Object::Null),
                 OpCode::LoadImmTrue => self.push_stack(Object::Bool(true)),
                 OpCode::LoadImmFalse => self.push_stack(Object::Bool(false)),
@@ -39,37 +25,29 @@ impl<'a> VirtualMachine {
                 OpCode::LoadImm1F => self.push_stack(Object::Float(1f64)),
                 OpCode::LoadImm1I => self.push_stack(Object::Int(1i64)),
 
-                OpCode::LoadImmN | OpCode::LoadImmNLong => {
-                    let imm = if let OpCode::LoadImmN = instruction {
-                        self.get_next_byte().unwrap() as i64
-                    } else {
-                        self.get_next_short().unwrap() as i64
-                    };
+                OpCode::PopStackTop => {
+                    self.pop_stack();
+                }
 
+                OpCode::PopStackN | OpCode::PopStackNLong => {
+                    for _ in 0..self.get_std_or_long_operand(OpCode::PopStackN) {
+                        self.pop_stack();
+                    }
+                }
+
+                OpCode::LoadImmN | OpCode::LoadImmNLong => {
+                    let imm = self.get_std_or_long_operand(OpCode::LoadImmN) as i64;
                     self.push_stack(Object::Int(imm))
                 }
 
                 OpCode::LoadConstant | OpCode::LoadConstantLong => {
-                    // Either gets the next byte or the next short based on the instruction
-                    // The compiler makes sure that the structure of the bytecode is correct
-                    // for the VM to execute, so unwrapping without check should be fine.
-                    let pos = if let OpCode::LoadConstant = instruction {
-                        self.get_next_byte().unwrap() as usize
-                    } else {
-                        self.get_next_short().unwrap() as usize
-                    };
-
-                    // Gets the value from the pool and places it on top of the stack
+                    let pos = self.get_std_or_long_operand(OpCode::LoadConstant);
                     let val = self.read_constant(pos).clone();
                     self.push_stack(val)
                 }
 
                 OpCode::DefineGlobal | OpCode::DefineGlobalLong => {
-                    let pos = if let OpCode::DefineGlobal = instruction {
-                        self.get_next_byte().unwrap() as usize
-                    } else {
-                        self.get_next_short().unwrap() as usize
-                    };
+                    let pos = self.get_std_or_long_operand(OpCode::DefineGlobal);
 
                     // Gets the name from the pool assigns the value to the global
                     if let Object::String(name) = self.read_constant(pos).clone() {
@@ -81,11 +59,7 @@ impl<'a> VirtualMachine {
                 }
 
                 OpCode::GetGlobal | OpCode::GetGlobalLong => {
-                    let pos = if let OpCode::GetGlobal = instruction {
-                        self.get_next_byte().unwrap() as usize
-                    } else {
-                        self.get_next_short().unwrap() as usize
-                    };
+                    let pos = self.get_std_or_long_operand(OpCode::GetGlobal);
 
                     // Gets the name from the pool
                     if let Object::String(name) = self.read_constant(pos).clone() {
@@ -97,11 +71,7 @@ impl<'a> VirtualMachine {
                 }
 
                 OpCode::SetGlobal | OpCode::SetGlobalLong => {
-                    let pos = if let OpCode::SetGlobal = instruction {
-                        self.get_next_byte().unwrap() as usize
-                    } else {
-                        self.get_next_short().unwrap() as usize
-                    };
+                    let pos = self.get_std_or_long_operand(OpCode::SetGlobal);
 
                     // Gets the name from the pool
                     if let Object::String(name) = self.read_constant(pos).clone() {
@@ -134,13 +104,8 @@ impl<'a> VirtualMachine {
                 }
 
                 OpCode::JumpHasNextOrPop | OpCode::JumpHasNextOrPopLong => {
+                    let jump = self.get_std_or_long_operand(OpCode::JumpHasNextOrPop);
                     self.pop_stack(); // pop the current iterator item off the stack
-
-                    let jump = if let OpCode::JumpHasNextOrPop = instruction {
-                        self.get_next_byte().unwrap() as usize
-                    } else {
-                        self.get_next_short().unwrap() as usize
-                    };
 
                     match self.peek_stack(self.stack.len() - 1) {
                         Object::Iter(o) => {
@@ -156,12 +121,7 @@ impl<'a> VirtualMachine {
 
                 OpCode::MakeArray | OpCode::MakeArrayLong => {
                     // The number of values to pop from the stack. Essentially the size of the array.
-                    let size = if let OpCode::MakeArray = instruction {
-                        self.get_next_byte().unwrap() as usize
-                    } else {
-                        self.get_next_short().unwrap() as usize
-                    };
-
+                    let size = self.get_std_or_long_operand(OpCode::MakeArray);
                     let mut arr_values: Vec<Object> = vec![];
 
                     for _ in 0..size {
@@ -173,12 +133,7 @@ impl<'a> VirtualMachine {
 
                 OpCode::MakeTuple | OpCode::MakeTupleLong => {
                     // The number of values to pop from the stack. Essentially the size of the array.
-                    let size = if let OpCode::MakeTuple = instruction {
-                        self.get_next_byte().unwrap() as usize
-                    } else {
-                        self.get_next_short().unwrap() as usize
-                    };
-
+                    let size = self.get_std_or_long_operand(OpCode::MakeTuple);
                     let mut tuple_values: Vec<Object> = Vec::with_capacity(size);
 
                     for _ in 0..size {
@@ -200,11 +155,7 @@ impl<'a> VirtualMachine {
 
                 OpCode::GetLocal | OpCode::GetLocalLong => {
                     // The position of the local variable's value in the stack
-                    let pos = if let OpCode::GetLocal = instruction {
-                        self.get_next_byte().unwrap() as usize
-                    } else {
-                        self.get_next_short().unwrap() as usize
-                    };
+                    let pos = self.get_std_or_long_operand(OpCode::GetLocal);
 
                     let idx = self.current_frame().base_pointer + pos;
                     let value = self.peek_stack(idx).clone();
@@ -213,11 +164,7 @@ impl<'a> VirtualMachine {
 
                 OpCode::SetLocal | OpCode::SetLocalLong => {
                     // The position of the local variable's value in the stack
-                    let pos = if let OpCode::SetLocal = instruction {
-                        self.get_next_byte().unwrap() as usize
-                    } else {
-                        self.get_next_short().unwrap() as usize
-                    };
+                    let pos = self.get_std_or_long_operand(OpCode::SetLocal);
 
                     let value = self.stack.last().unwrap();
                     let offset = self.current_frame().base_pointer;
@@ -434,7 +381,7 @@ impl<'a> VirtualMachine {
                 }
 
                 OpCode::PopJumpIfFalse => {
-                    // The OP_JUMP_IF_FALSE instruction always has a short as its operand.
+                    // The POP_JUMP_IF_FALSE instruction always has a short as its operand.
                     let offset = self.get_next_short().unwrap() as usize;
 
                     if self.pop_stack().is_falsey() {
@@ -443,7 +390,7 @@ impl<'a> VirtualMachine {
                 }
 
                 OpCode::JumpIfFalseOrPop => {
-                    // The OP_JUMP_IF_FALSE instruction always has a short as its operand.
+                    // The JUMP_IF_FALSE_OR_POP instruction always has a short as its operand.
                     let offset = self.get_next_short().unwrap() as usize;
 
                     if self.peek_stack(self.stack.len() - 1).is_falsey() {
@@ -454,7 +401,7 @@ impl<'a> VirtualMachine {
                 }
 
                 OpCode::JumpIfTrueOrPop => {
-                    // The OP_JUMP_IF_FALSE instruction always has a short as its operand.
+                    // The JUMP_IF_TRUE_OR_POP instruction always has a short as its operand.
                     let offset = self.get_next_short().unwrap() as usize;
 
                     if !self.peek_stack(self.stack.len() - 1).is_falsey() {
@@ -465,18 +412,13 @@ impl<'a> VirtualMachine {
                 }
 
                 OpCode::JumpForward => {
-                    // The OP_JUMP instruction always has a short as its operand.
+                    // The JUMP_FORWARD instruction always has a short as its operand.
                     let offset = self.get_next_short().unwrap() as usize;
                     self.current_frame_mut().ip += offset;
                 }
 
                 OpCode::LoopJump | OpCode::LoopJumpLong => {
-                    let offset = if let OpCode::LoopJump = instruction {
-                        self.get_next_byte().unwrap() as usize
-                    } else {
-                        self.get_next_short().unwrap() as usize
-                    };
-
+                    let offset = self.get_std_or_long_operand(OpCode::LoopJump);
                     self.current_frame_mut().ip -= offset;
                 }
 
@@ -493,6 +435,7 @@ impl<'a> VirtualMachine {
                 }
 
                 OpCode::FuncCall => {
+                    // Functions can only have 255-MAX parameters
                     let arg_count = self.get_next_byte().unwrap();
 
                     let maybe_function = self
@@ -507,7 +450,93 @@ impl<'a> VirtualMachine {
                     }
                 }
 
+                OpCode::MakeClosure | OpCode::MakeClosureLarge => {
+                    let pos = self.get_std_or_long_operand(OpCode::MakeClosure);
+
+                    let function = match self.read_constant(pos).clone() {
+                        Object::Function(obj) => obj,
+                        _ => unreachable!("Expected a function object for closure."),
+                    };
+
+                    let mut up_values: Vec<Rc<RefCell<UpValRef>>> = Vec::with_capacity(function.up_val_count);
+
+                    for _ in 0..(function.up_val_count) {
+                        let is_local = self.get_next_byte().unwrap() == 1u8;
+                        let index = self.get_next_byte().unwrap() as usize;
+
+                        let up = if is_local {
+                            self.create_up_value(self.current_frame().base_pointer + index)
+                        } else {
+                            self.current_frame().closure.up_values[index].clone()
+                        };
+
+                        up_values.push(up.clone());
+                    }
+
+                    self.push_stack(Object::Closure(ClosureObject { function, up_values }));
+                }
+
+                OpCode::MakeClosureLong | OpCode::MakeClosureLongLarge => {
+                    let pos = self.get_std_or_long_operand(OpCode::MakeClosureLong);
+
+                    let function = match self.read_constant(pos).clone() {
+                        Object::Function(obj) => obj,
+                        _ => unreachable!("Expected a function object for closure."),
+                    };
+
+                    let mut up_values: Vec<Rc<RefCell<UpValRef>>> = Vec::with_capacity(function.up_val_count);
+
+                    for _ in 0..(function.up_val_count) {
+                        let is_local = self.get_next_byte().unwrap() == 1u8;
+                        let index = self.get_next_short().unwrap() as usize;
+
+                        let up = if is_local {
+                            self.create_up_value(self.current_frame().base_pointer + index)
+                        } else {
+                            self.current_frame().closure.up_values[index].clone()
+                        };
+
+                        up_values.push(up.clone());
+                    }
+
+                    self.push_stack(Object::Closure(ClosureObject { function, up_values }));
+                }
+
+                OpCode::GetUpVal | OpCode::GetUpValLong => {
+                    let pos = self.get_std_or_long_operand(OpCode::GetUpVal);
+
+                    let val = match &*self.get_up_val(pos).borrow() {
+                        UpValRef::Open(l) => self.peek_stack(*l).clone(),
+                        UpValRef::Closed(o) => o.clone(),
+                    };
+
+                    self.push_stack(val);
+                }
+
+                OpCode::SetUpVal | OpCode::SetUpValLong => {
+                    let pos = self.get_std_or_long_operand(OpCode::SetUpVal);
+                    let new_val = self.stack.last().unwrap().clone();
+
+                    match &mut *self.get_up_val(pos).borrow_mut() {
+                        UpValRef::Open(l) => self.stack[*l] = new_val,
+                        UpValRef::Closed(u) => *u = new_val,
+                    }
+                }
+
+                OpCode::CloseUpVal | OpCode::CloseUpValLong => {
+                    let pos = self.get_std_or_long_operand(OpCode::CloseUpVal);
+
+                    for u in self.up_values.iter() {
+                        if u.borrow().is_open_at(self.current_frame().base_pointer + pos) {
+                            let new_val = self.peek_stack(self.current_frame().base_pointer + pos);
+                            u.replace(UpValRef::Closed(new_val.clone()));
+                            break;
+                        }
+                    }
+                }
+
                 OpCode::BindDefaults => {
+                    // Functions can only have 255-MAX parameters
                     let param_count = self.get_next_byte().unwrap();
 
                     let mut defaults: Vec<Object> = vec![];
@@ -521,27 +550,31 @@ impl<'a> VirtualMachine {
                         Object::Function(m) => {
                             m.defaults = defaults;
                         }
+                        Object::Closure(m) => {
+                            m.function.defaults = defaults;
+                        }
                         _ => unreachable!("Expected a function object on TOS."),
                     }
                 }
 
                 OpCode::Return => {
-                    let locals_to_pop = self.get_next_byte().unwrap();
                     let result = self.pop_stack();
+                    let locals_to_pop = self.stack.len() - self.current_frame().base_pointer;
 
                     // Pops local declarations from the stack
-                    for _ in 0..(locals_to_pop + 1) {
+                    for _ in 0..locals_to_pop {
                         self.pop_stack();
                     }
 
                     // removes the call frame
                     self.frames.pop();
-
-                    if self.frames.len() == 0 {
-                        return RuntimeResult::Ok;
-                    }
-
                     self.push_stack(result);
+                }
+
+                OpCode::EndVirtualMachine => {
+                    self.pop_stack(); // Remove the main function off the stack
+                    self.frames.pop();
+                    return RuntimeResult::Ok;
                 }
             }
 
@@ -553,5 +586,22 @@ impl<'a> VirtualMachine {
         // to return (because errors are returned by the match rules), so we can
         // safely return an `INTERPRET_OK` result.
         return RuntimeResult::Ok;
+    }
+
+    /// Either gets the next byte or the next short based on the instruction.
+    /// If the current instruction matches the instruction corresponding to
+    /// a one-byte operand, then this function returns the next byte as `usize`,
+    /// otherwise it will return the next two bytes a `usize`.
+    ///
+    /// ## Arguments
+    /// * `op` – The instructions corresponding to a one-byte operand.
+    fn get_std_or_long_operand(&mut self, op: OpCode) -> usize {
+        // The compiler makes sure that the structure of the bytecode is correct
+        // for the VM to execute, so unwrapping without check should be fine.
+        if op == self.current_frame_mut().peek_current_op_code().unwrap() {
+            self.get_next_byte().unwrap() as usize
+        } else {
+            self.get_next_short().unwrap() as usize
+        }
     }
 }

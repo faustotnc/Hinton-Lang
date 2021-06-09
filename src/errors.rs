@@ -135,7 +135,7 @@ pub fn report_runtime_error(vm: &VirtualMachine, error: RuntimeErrorType, messag
     let source_lines: Vec<&str> = source.split("\n").collect();
 
     let frame = vm.current_frame();
-    let line = frame.function.chunk.get_line_info(frame.ip - 1).unwrap();
+    let line = frame.closure.function.chunk.get_line_info(frame.ip - 1).unwrap();
 
     let error_name = match error {
         RuntimeErrorType::ArgumentError => "ArgumentError",
@@ -162,14 +162,14 @@ pub fn report_runtime_error(vm: &VirtualMachine, error: RuntimeErrorType, messag
     let frames_list_len = frames_list.len();
 
     for (i, frame) in frames_list.enumerate() {
-        let func = &frame.function;
-        let line = frame.function.chunk.get_line_info(frame.ip).unwrap();
+        let func = &frame.closure;
+        let line = frame.closure.function.chunk.get_line_info(frame.ip).unwrap();
 
         let new_err;
-        if func.name.starts_with('<') {
-            new_err = format!("{:4}at [{}:{}] in {}", "", line.0, line.1, func.name);
+        if func.function.name.starts_with('<') {
+            new_err = format!("{:4}at [{}:{}] in {}", "", line.0, line.1, func.function.name);
         } else {
-            new_err = format!("{:4}at [{}:{}] in '{}()'", "", line.0, line.1, func.name);
+            new_err = format!("{:4}at [{}:{}] in '{}()'", "", line.0, line.1, func.function.name);
         }
 
         if prev_err == new_err {

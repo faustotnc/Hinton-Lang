@@ -5,22 +5,6 @@ use std::{cell::RefCell, fmt, rc::Rc};
 mod indexing;
 mod native_operations;
 
-/// All types of objects in Hinton
-#[derive(Clone)]
-pub enum Object {
-    Array(Vec<Object>),
-    Bool(bool),
-    Float(f64),
-    Function(FuncObject),
-    Int(i64),
-    Iter(Rc<RefCell<IterObject>>),
-    Native(NativeFuncObj),
-    Null,
-    Range(RangeObject),
-    String(String),
-    Tuple(Vec<Object>),
-}
-
 /// Represents a Hinton range object.
 #[derive(Clone)]
 pub struct RangeObject {
@@ -42,6 +26,7 @@ pub struct FuncObject {
     pub max_arity: u8,
     pub chunk: Chunk,
     pub name: String,
+    pub up_val_count: usize,
 }
 
 impl Default for FuncObject {
@@ -52,6 +37,7 @@ impl Default for FuncObject {
             max_arity: 0,
             chunk: Chunk::new(),
             name: String::from(""),
+            up_val_count: 0,
         }
     }
 }
@@ -65,13 +51,60 @@ pub struct NativeFuncObj {
     pub function: NativeFn,
 }
 
+#[derive(Clone)]
+pub struct ClosureObject {
+    pub function: FuncObject,
+    pub up_values: Vec<Rc<RefCell<UpValRef>>>,
+}
+
+#[derive(Clone)]
+pub enum UpValRef {
+    Open(usize),
+    Closed(Object),
+}
+
+impl UpValRef {
+    pub fn is_open_at(&self, index: usize) -> bool {
+        match self {
+            &UpValRef::Closed(_) => false,
+            &UpValRef::Open(i) => i == index,
+        }
+    }
+
+    pub fn print(&self) {
+        match &self {
+            &UpValRef::Open(p) => println!("UpValRef::OPEN({})", p),
+            &UpValRef::Closed(o) => println!("UpValRef::CLOSED({})", o),
+        }
+    }
+}
+
+/// All types of objects in Hinton
+#[derive(Clone)]
+pub enum Object {
+    Array(Vec<Object>),
+    Bool(bool),
+    Float(f64),
+    Function(FuncObject),
+    Int(i64),
+    Iter(Rc<RefCell<IterObject>>),
+    Null,
+    Range(RangeObject),
+    String(String),
+    Tuple(Vec<Object>),
+
+    // Internal
+    Closure(ClosureObject),
+    Native(NativeFuncObj),
+}
+
 impl Object {
     pub fn type_name(&self) -> &str {
         return match self {
             &Self::Array(_) => "Array",
             &Self::Bool(_) => "Bool",
             &Self::Float(_) => "Float",
-            &Self::Function(_) | Self::Native(_) => "Function",
+            &Self::Function(_) | Self::Native(_) | &Self::Closure(_) => "Function",
             &Self::Int(_) => "Int",
             &Self::Iter(_) => "Iter",
             &Self::Null => "Null",
@@ -173,6 +206,13 @@ impl Object {
     pub fn as_tuple(&self) -> Option<&Vec<Object>> {
         match self {
             Object::Tuple(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn as_function(&self) -> Option<&FuncObject> {
+        match self {
+            Object::Function(v) => Some(v),
             _ => None,
         }
     }
@@ -335,6 +375,15 @@ impl<'a> fmt::Display for Object {
                     String::from("<script>")
                 } else {
                     format!("<Func '{}'>", inner.name)
+                };
+
+                fmt::Display::fmt(&str, f)
+            }
+            Object::Closure(ref inner) => {
+                let str = if inner.function.name == "" {
+                    String::from("<Func script>")
+                } else {
+                    format!("<Func '{}'>", inner.function.name)
                 };
 
                 fmt::Display::fmt(&str, f)

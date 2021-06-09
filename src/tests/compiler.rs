@@ -53,7 +53,6 @@ fn test_const_pool_no_duplicate_items() {
     }
 }
 
-
 #[test]
 fn allow_break_inside_compact_while_loop() {
     let program = match Parser::parse("while (true) break;") {
@@ -80,7 +79,7 @@ fn allow_break_inside_compact_for_loop() {
 
 #[test]
 fn allow_break_inside_nested_while_loop_scope() {
-    let src =  "while true {
+    let src = "while true {
         {
             {{ break; }}
         }
@@ -98,7 +97,7 @@ fn allow_break_inside_nested_while_loop_scope() {
 
 #[test]
 fn allow_break_inside_nested_for_loop_scope() {
-    let src =  "for let x in 0..10 {
+    let src = "for let x in 0..10 {
         {
             {{ break; }}
         }

@@ -5,7 +5,7 @@ use num_traits::FromPrimitive;
 ///
 /// **NOTE:** Changing the order in which members are declared creates
 /// incompatibilities between different versions of the interpreter.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[repr(u8)]
 #[derive(FromPrimitive)]
 pub enum OpCode {
@@ -47,6 +47,8 @@ pub enum OpCode {
     NullishCoalescing,
     PopStackTop,
     Subtract,
+    EndVirtualMachine,
+    Return,
 
     // Instructions with one chunk operands.
     // These instructions use the next byte
@@ -61,11 +63,13 @@ pub enum OpCode {
     MakeArray,
     MakeTuple,
     PopStackN,
-    Return,
     SetLocal,
     DefineGlobal,
     GetGlobal,
     SetGlobal,
+    GetUpVal,
+    SetUpVal,
+    CloseUpVal,
 
     // Instructions with two chunk operands.
     // These instructions use the next two
@@ -86,6 +90,31 @@ pub enum OpCode {
     DefineGlobalLong,
     GetGlobalLong,
     SetGlobalLong,
+    GetUpValLong,
+    SetUpValLong,
+    CloseUpValLong,
+
+    // Instructions with a variable number of instructions.
+    MakeClosure,
+    // Byte #1 is the position of function object in the pool.
+    // --- UpValue Encoding (2 bytes per up_value) ---
+    // One byte if up value is local
+    // One byte for the position of the up value
+    MakeClosureLarge,
+    // Byte #1 is the position of function object in the pool.
+    // --- UpValue Encoding (3 bytes per up_value) ---
+    // One byte if up value is local
+    // Two bytes for the position of the up value
+    MakeClosureLong,
+    // Byte #1 and Byte #2 is the position of function object in the pool.
+    // --- UpValue Encoding (2 bytes per up_value) ---
+    // One byte if up value is local
+    // One byte for the position of the up value
+    MakeClosureLongLarge,
+    // Byte #1 and Byte #2 is the position of function object in the pool.
+    // --- UpValue Encoding (3 bytes per up_value) ---
+    // One byte if up value is local
+    // Two bytes for the position of the up value
 }
 
 /// Contains all the necessary information about
@@ -299,7 +328,7 @@ pub fn print_raw(chunk: &Chunk, name: &str) {
 /// ## Arguments
 /// * `name` – the name to print for the current chunk
 #[cfg(feature = "show_bytecode")]
-pub fn disassemble_chunk(chunk: &Chunk, name: &str) {
+pub fn disassemble_function_scope(chunk: &Chunk, name: &String) {
     // prints this chunk's name
     println!("==== {} ====", name);
 
@@ -314,15 +343,15 @@ pub fn disassemble_chunk(chunk: &Chunk, name: &str) {
         // current instruction is in the same line as the previous one.
         if let Some(location) = line_info {
             if location.0 != current_line {
-                print!("{:>03}\t", location.0);
+                print!("{:>05}\t", location.0);
                 current_line = location.0;
             } else {
-                print!(" |\t")
+                print!("  |\t")
             }
         }
 
         // Prints the index of the current instruction
-        print!("{:>04} ", idx);
+        print!("{:>05} ", idx);
 
         // Prints the instruction name
         if let Some(instr) = code {
@@ -331,18 +360,17 @@ pub fn disassemble_chunk(chunk: &Chunk, name: &str) {
 
             // Reads two bytes as the index of a constant
             let const_val = |idx: usize, is_long: bool| -> &Object {
-                let pos;
-                if is_long {
-                    pos = match chunk.get_short(idx) {
+                let pos = if is_long {
+                    match chunk.get_short(idx) {
                         Some(short) => short as usize,
                         None => unreachable!("Could not get short."),
-                    };
+                    }
                 } else {
-                    pos = match chunk.get_byte(idx) {
+                    match chunk.get_byte(idx) {
                         Some(byte) => byte as usize,
                         None => unreachable!("Could not get byte."),
-                    };
-                }
+                    }
+                };
 
                 chunk.get_constant(pos).unwrap()
             };
@@ -350,10 +378,11 @@ pub fn disassemble_chunk(chunk: &Chunk, name: &str) {
             // Gets the operand value
             let mut get_operand = |operand_count: usize| {
                 idx += operand_count;
+
                 operand_val = if operand_count == 1 {
-                    format!("{}", chunk.get_byte(idx - (operand_count - 1)).unwrap())
+                    format!("{}", chunk.get_byte(idx).unwrap())
                 } else {
-                    format!("{}", chunk.get_short(idx - (operand_count - 1)).unwrap())
+                    format!("{}", chunk.get_short(idx - 1).unwrap())
                 }
             };
 
@@ -392,6 +421,8 @@ pub fn disassemble_chunk(chunk: &Chunk, name: &str) {
                 OpCode::NullishCoalescing => op_code_name = "NULLISH",
                 OpCode::PopStackTop => op_code_name = "POP_STACK_TOP",
                 OpCode::Subtract => op_code_name = "SUBTRACT",
+                OpCode::EndVirtualMachine => op_code_name = "END_VIRTUAL_MACHINE",
+                OpCode::Return => op_code_name = "RETURN",
 
                 // OpCodes with 1 operand
                 OpCode::BindDefaults => {
@@ -456,12 +487,20 @@ pub fn disassemble_chunk(chunk: &Chunk, name: &str) {
                     op_code_name = "POP_STACK_N";
                     get_operand(1);
                 }
-                OpCode::Return => {
-                    op_code_name = "RETURN";
-                    get_operand(1);
-                }
                 OpCode::SetLocal => {
                     op_code_name = "SET_LOCAL";
+                    get_operand(1);
+                }
+                OpCode::GetUpVal => {
+                    op_code_name = "GET_UP_VAL";
+                    get_operand(1);
+                }
+                OpCode::SetUpVal => {
+                    op_code_name = "SET_UP_VAL";
+                    get_operand(1);
+                }
+                OpCode::CloseUpVal => {
+                    op_code_name = "CLOSE_UP_VAL";
                     get_operand(1);
                 }
 
@@ -499,17 +538,17 @@ pub fn disassemble_chunk(chunk: &Chunk, name: &str) {
                 }
                 OpCode::DefineGlobalLong => {
                     op_code_name = "DEFINE_GLOBAL_LONG";
-                    get_operand(1);
+                    get_operand(2);
                     operand_val += &format!(" -> '{}'", const_val(idx - 1, true));
                 }
                 OpCode::GetGlobalLong => {
                     op_code_name = "GET_GLOBAL_LONG";
-                    get_operand(1);
+                    get_operand(2);
                     operand_val += &format!(" -> '{}'", const_val(idx - 1, true));
                 }
                 OpCode::SetGlobalLong => {
                     op_code_name = "GET_GLOBAL_LONG";
-                    get_operand(1);
+                    get_operand(2);
                     operand_val += &format!(" -> '{}'", const_val(idx - 1, true));
                 }
                 OpCode::LoadImmNLong => {
@@ -546,14 +585,93 @@ pub fn disassemble_chunk(chunk: &Chunk, name: &str) {
                     op_code_name = "SET_LOCAL_LONG";
                     get_operand(2);
                 }
+                OpCode::GetUpValLong => {
+                    op_code_name = "GET_UP_VAL_LONG";
+                    get_operand(2);
+                }
+                OpCode::SetUpValLong => {
+                    op_code_name = "SET_UP_VAL_LONG";
+                    get_operand(2);
+                }
+                OpCode::CloseUpValLong => {
+                    op_code_name = "CLOSE_UP_VAL_LONG";
+                    get_operand(2);
+                }
+
+                OpCode::MakeClosure | OpCode::MakeClosureLong => {
+                    let up_value_count;
+                    if let OpCode::MakeClosure = FromPrimitive::from_u8(instr).unwrap() {
+                        op_code_name = "MAKE_CLOSURE";
+                        get_operand(1);
+
+                        let obj = const_val(idx, false);
+                        up_value_count = obj.as_function().unwrap().up_val_count;
+                        operand_val += &format!(" -> '{}'", obj);
+                    } else {
+                        op_code_name = "MAKE_CLOSURE_LONG";
+                        get_operand(2);
+
+                        let obj = const_val(idx, true);
+                        up_value_count = obj.as_function().unwrap().up_val_count;
+                        operand_val += &format!(" -> '{}'", obj);
+                    }
+
+                    for i in 0..up_value_count {
+                        if i <= (up_value_count - 1) {
+                            operand_val += "\n";
+                        }
+
+                        operand_val += &format!("  |\t{:>05}      | {}", idx + 1, i);
+
+                        let is_local = chunk.get_byte(idx + 1).unwrap() == 1u8;
+                        let index = chunk.get_byte(idx + 2).unwrap();
+                        let up_val_type = if is_local { "Local" } else { "UpVal" };
+                        operand_val += &format!(" {} idx={}", up_val_type, index);
+
+                        idx += 2;
+                    }
+                }
+
+                OpCode::MakeClosureLarge | OpCode::MakeClosureLongLarge => {
+                    let up_value_count;
+                    if let OpCode::MakeClosureLarge = FromPrimitive::from_u8(instr).unwrap() {
+                        op_code_name = "MAKE_CLOSURE_LARGE";
+                        get_operand(1);
+
+                        let obj = const_val(idx, false);
+                        up_value_count = obj.as_function().unwrap().up_val_count;
+                        operand_val += &format!(" -> '{}'", obj);
+                    } else {
+                        op_code_name = "MAKE_CLOSURE_LONG_LARGE";
+                        get_operand(2);
+
+                        let obj = const_val(idx, true);
+                        up_value_count = obj.as_function().unwrap().up_val_count;
+                        operand_val += &format!(" -> '{}'", obj);
+                    }
+
+                    for i in 0..up_value_count {
+                        if i <= (up_value_count - 1) {
+                            operand_val += "\n";
+                        }
+
+                        operand_val += &format!("  |\t{:>05}      | {}", idx + 1, i);
+
+                        let is_local = chunk.get_byte(idx + 1).unwrap() == 1u8;
+                        let index = chunk.get_short(idx + 2).unwrap();
+                        let up_val_type = if is_local { "Local" } else { "UpVal" };
+                        operand_val += &format!(" {} idx={}", up_val_type, index);
+
+                        idx += 3;
+                    }
+                }
             }
 
             // Prints the instruction code and instruction name
-            print!(
-                "\x1b[32m{:#04X}\x1b[0m – \x1b[36m{:<26}\x1b[0m ",
-                instr, op_code_name
+            println!(
+                "\x1b[32m{:#04X}\x1b[0m – \x1b[36m{:<26}\x1b[0m {}",
+                instr, op_code_name, operand_val
             );
-            println!("{}", operand_val);
         } else {
             println!("No Instruction Found...");
         }

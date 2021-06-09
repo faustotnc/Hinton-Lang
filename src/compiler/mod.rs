@@ -53,6 +53,7 @@ enum CompilerType {
 
 pub struct FunctionScope {
     function: FuncObject,
+    up_values: Vec<UpValue>,
     // Lexical scoping of declarations
     s_table: SymbolTable,
     scope_depth: usize,
@@ -61,6 +62,19 @@ pub struct FunctionScope {
     // patch the break (OP_JUMP) offsets.
     loops: Vec<LoopScope>,
     breaks: Vec<BreakScope>,
+}
+
+#[derive(Clone)]
+/// Represents an UpValue (free variable) in a closure.
+pub struct UpValue {
+    /// The captured symbol.
+    pub symbol: Symbol,
+    /// The index of the symbol in the parent function.
+    pub index: usize,
+    /// Whether or not this UpValue refers to a local
+    /// variable in a parent function, or an UpValue
+    /// captured by the parent function.
+    pub is_local: bool,
 }
 
 /// Represents a compiler and its internal state.
@@ -86,17 +100,15 @@ impl Compiler {
     pub fn compile_file(filepath: &str, program: &ASTNode) -> Result<FuncObject, Vec<ErrorReport>> {
         // The first element in a symbol table is always the symbol representing
         // the function to which the symbol table belongs.
-        let symbols = SymbolTable {
-            symbols: vec![Symbol {
-                name: format!("<File '{}'>", filepath),
-                symbol_type: SymbolType::Function,
-                is_initialized: true,
-                symbol_depth: 0,
-                is_used: true,
-                line_info: (0, 0),
-                is_global: true,
-            }],
-        };
+        let symbols = SymbolTable::new(vec![Symbol {
+            name: format!("<File '{}'>", filepath),
+            symbol_type: SymbolType::Function,
+            is_initialized: true,
+            symbol_depth: 0,
+            is_used: true,
+            line_info: (0, 0),
+            is_captured: false,
+        }]);
 
         let base_fn = FunctionScope {
             function: FuncObject {
@@ -105,56 +117,37 @@ impl Compiler {
                 max_arity: 0,
                 chunk: bytecode::Chunk::new(),
                 name: format!("<File '{}'>", filepath),
+                up_val_count: 0,
             },
             s_table: symbols,
             scope_depth: 0,
             loops: vec![],
             breaks: vec![],
+            up_values: vec![],
         };
 
         let mut _self = Compiler {
             compiler_type: CompilerType::Script,
             functions: vec![base_fn],
             errors: vec![],
-            globals: SymbolTable { symbols: vec![] },
+            globals: SymbolTable::new(vec![]),
         };
 
         // Compile the function body
         _self.compile_node(&program);
-        _self.end_function();
+        _self.emit_op_code(bytecode::OpCode::EndVirtualMachine, (0, 0));
+
+        // Print the bytecode for the main function when the appropriate flag is set.
+        #[cfg(feature = "show_bytecode")]
+        _self.print_pretty_bytecode();
+        #[cfg(feature = "show_raw_bytecode")]
+        _self.print_raw_bytecode();
 
         if _self.errors.len() == 0 {
             Ok(std::mem::take(&mut _self.current_func_scope_mut().function))
         } else {
             return Err(_self.errors);
         }
-    }
-
-    fn end_function(&mut self) {
-        // TODO: Emit the correct position
-        self.emit_op_code(bytecode::OpCode::LoadImmNull, (0, 0));
-        self.emit_op_code(bytecode::OpCode::Return, (0, 0));
-
-        // The number of local symbols that need to be popped off the stack
-        let num_of_symbols = if self.functions.len() == 1 {
-            0
-        } else {
-            self.current_function_scope().s_table.len() - 1
-        };
-
-        self.emit_raw_byte(num_of_symbols as u8, (0, 0));
-
-        // Shows the chunk.
-        #[cfg(feature = "show_bytecode")]
-        bytecode::disassemble_chunk(
-            self.current_chunk(),
-            self.current_function_scope().function.name.clone().as_str(),
-        );
-        #[cfg(feature = "show_raw_bytecode")]
-        bytecode::print_raw(
-            self.current_chunk(),
-            self.current_function_scope().function.name.clone().as_str(),
-        );
     }
 
     /// Compiles an AST node.
@@ -223,14 +216,30 @@ impl Compiler {
         self.current_function_scope().scope_depth
     }
 
+    #[cfg(feature = "show_bytecode")]
+    fn print_pretty_bytecode(&self) {
+        bytecode::disassemble_function_scope(
+            &self.current_function_scope().function.chunk,
+            &self.current_function_scope().function.name,
+        );
+    }
+
+    #[cfg(feature = "show_raw_bytecode")]
+    fn print_raw_bytecode(&self) {
+        bytecode::print_raw(
+            self.current_chunk(),
+            self.current_function_scope().function.name.clone().as_str(),
+        );
+    }
+
     /// Emits a byte instruction from an OpCode into the chunk's instruction list.
     ///
     /// ## Arguments
     /// * `instr` – The OpCode instruction to added to the chunk.
     /// * `pos` – The source line and column associated with this op_code.
     fn emit_op_code(&mut self, instr: bytecode::OpCode, pos: (usize, usize)) {
-        self.current_chunk_mut().push_byte(instr as u8);
-        self.current_chunk_mut().push_line_info(pos.clone());
+        self.current_chunk_mut().push_op_code(instr);
+        self.current_chunk_mut().push_line_info(pos);
     }
 
     /// Emits a raw byte instruction into the chunk's instruction list.
@@ -240,7 +249,7 @@ impl Compiler {
     /// * `pos` – The source line and column associated with this op_code.
     fn emit_raw_byte(&mut self, byte: u8, pos: (usize, usize)) {
         self.current_chunk_mut().push_byte(byte);
-        self.current_chunk_mut().push_line_info(pos.clone());
+        self.current_chunk_mut().push_line_info(pos);
     }
 
     /// Emits a short instruction from a 16-bit integer into the chunk's instruction list.
@@ -250,8 +259,23 @@ impl Compiler {
     /// * `pos` – The source line and column associated with this op_code.
     fn emit_short(&mut self, instr: u16, pos: (usize, usize)) {
         self.current_chunk_mut().push_short(instr);
-        self.current_chunk_mut().push_line_info(pos.clone());
-        self.current_chunk_mut().push_line_info(pos.clone());
+        self.current_chunk_mut().push_line_info(pos);
+        self.current_chunk_mut().push_line_info(pos);
+    }
+
+    fn emit_op_code_with_byte(&mut self, instr: bytecode::OpCode, byte: u8, pos: (usize, usize)) {
+        self.current_chunk_mut().push_op_code(instr);
+        self.current_chunk_mut().push_byte(byte);
+        self.current_chunk_mut().push_line_info(pos);
+        self.current_chunk_mut().push_line_info(pos);
+    }
+
+    fn emit_op_code_with_short(&mut self, instr: bytecode::OpCode, short: u16, pos: (usize, usize)) {
+        self.current_chunk_mut().push_op_code(instr);
+        self.current_chunk_mut().push_short(short);
+        self.current_chunk_mut().push_line_info(pos);
+        self.current_chunk_mut().push_line_info(pos);
+        self.current_chunk_mut().push_line_info(pos);
     }
 
     /// Emits a jump instructions with a dummy jump offset. This offset should be
@@ -266,8 +290,7 @@ impl Compiler {
     /// should be used by the call to the `patch_jump(...)` function to patch the
     /// correct jump instruction's offset.
     fn emit_jump(&mut self, instruction: bytecode::OpCode, token: &Token) -> usize {
-        self.emit_op_code(instruction, (token.line_num, token.column_num));
-        self.emit_short(0xffff, (token.line_num, token.column_num));
+        self.emit_op_code_with_short(instruction, 0xffff, (token.line_num, token.column_num));
         return self.current_chunk_mut().len() - 2;
     }
 

@@ -90,16 +90,16 @@ impl Compiler {
                 symbol_type: SymbolType::Constant,
                 is_used: true,
                 line_info: loop_line_info,
-                is_global: false,
+                is_captured: false,
             },
         ) {
-            Ok(symbol_pos) => self.current_func_scope_mut().s_table.symbols[symbol_pos].is_initialized = true,
+            Ok(symbol_pos) => self.current_func_scope_mut().s_table.mark_initialized(symbol_pos),
             Err(_) => return,
         }
 
         // Declares the loop's identifier.
         match self.declare_symbol(&stmt.id.token, SymbolType::Variable) {
-            Ok(symbol_pos) => self.current_func_scope_mut().s_table.symbols[symbol_pos].is_initialized = true,
+            Ok(symbol_pos) => self.current_func_scope_mut().s_table.mark_initialized(symbol_pos),
             Err(_) => return,
         }
 
@@ -112,15 +112,13 @@ impl Compiler {
         // Jump back to the start of the loop if we haven't reached the end of the
         // iterator. This instruction takes care of popping the loop's  variable.
         if offset < 256 {
-            self.emit_op_code(OpCode::JumpHasNextOrPop, loop_line_info);
-            self.emit_raw_byte(offset as u8, loop_line_info);
+            self.emit_op_code_with_byte(OpCode::JumpHasNextOrPop, offset as u8, loop_line_info);
         } else {
             // +3 to count the Jump instruction and its two operands
             let offset = (self.current_chunk().len() + 3) - loop_start;
 
             if offset < u16::MAX as usize {
-                self.emit_op_code(OpCode::JumpHasNextOrPopLong, loop_line_info);
-                self.emit_short(offset as u16, loop_line_info);
+                self.emit_op_code_with_short(OpCode::JumpHasNextOrPopLong, offset as u16, loop_line_info);
             } else {
                 self.error_at_token(
                     &stmt.token,
@@ -176,29 +174,19 @@ impl Compiler {
         }
 
         let current_loop = *self.current_function_scope().loops.last().unwrap();
-        let popped_scope =
+        let mut popped_scope =
             self.current_func_scope_mut()
                 .s_table
                 .pop_scope(current_loop.scope_depth, false, false);
 
-        let mut pop_count = popped_scope.0;
-        let last_symbol_pos = popped_scope.1;
-
         // If we are breaking inside a for-in loop, also pop the loop's variable
         // and the iterator off the stack before exiting the loop.
         if let super::LoopType::ForIn = current_loop.loop_type {
-            pop_count += 2;
+            popped_scope.append(&mut vec![false, false]);
         }
 
-        if pop_count > 0 {
-            if pop_count < 256 {
-                self.emit_op_code(OpCode::PopStackN, last_symbol_pos);
-                self.emit_raw_byte(pop_count as u8, last_symbol_pos);
-            } else {
-                self.emit_op_code(OpCode::PopStackNLong, last_symbol_pos);
-                self.emit_short(pop_count as u16, last_symbol_pos);
-            }
-        }
+        // Emit the pop instructions
+        self.emit_pop_stack_n(popped_scope, &stmt.token);
 
         // Jump out of the loop
         let break_pos = self.emit_jump(OpCode::JumpForward, &stmt.token);

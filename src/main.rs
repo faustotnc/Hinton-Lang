@@ -89,7 +89,7 @@ fn run_file(filename: &String) {
         Ok(path) => path,
         Err(error) => {
             match error.kind() {
-                ErrorKind::NotFound => eprintln!("File not '{}' found.", filename),
+                ErrorKind::NotFound => eprintln!("File '{}' not found.", filename),
                 ErrorKind::PermissionDenied => eprintln!("Need permission to open '{}'.", filename),
                 ErrorKind::UnexpectedEof => eprintln!("Unexpected End of file '{}'.", filename),
                 _ => eprintln!("Unexpected error when opening file '{}'.", filename),
@@ -103,7 +103,7 @@ fn run_file(filename: &String) {
         Ok(src) => src,
         Err(error) => {
             match error.kind() {
-                ErrorKind::NotFound => eprintln!("File not '{}' found.", filename),
+                ErrorKind::NotFound => eprintln!("File '{}' not found.", filename),
                 ErrorKind::PermissionDenied => eprintln!("Need permission to open '{}'.", filename),
                 ErrorKind::UnexpectedEof => eprintln!("Unexpected End of file '{}'.", filename),
                 _ => eprintln!("Unexpected error when opening file '{}'.", filename),
