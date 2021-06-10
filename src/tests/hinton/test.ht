@@ -124,3 +124,33 @@ for let tag in title_tags {
     assert_eq(tag, title_tags[tag_index]);
     tag_index += 1;
 }
+
+
+// More Closures
+let globalOne;
+let globalTwo;
+
+func main() {
+    {
+        let a = "one";
+        
+        func one() {
+            return a;
+        }
+        
+        globalOne = one;
+    }
+    
+    {
+        let a = "two";
+        func two() {
+            return a;
+        }
+        
+        globalTwo = two;
+    }
+}
+
+main();
+assert_eq(globalOne(), "one");
+assert_eq(globalTwo(), "two");

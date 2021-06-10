@@ -29,12 +29,6 @@ impl<'a> VirtualMachine {
                     self.pop_stack();
                 }
 
-                OpCode::PopStackN | OpCode::PopStackNLong => {
-                    for _ in 0..self.get_std_or_long_operand(OpCode::PopStackN) {
-                        self.pop_stack();
-                    }
-                }
-
                 OpCode::LoadImmN | OpCode::LoadImmNLong => {
                     let imm = self.get_std_or_long_operand(OpCode::LoadImmN) as i64;
                     self.push_stack(Object::Int(imm))
@@ -530,6 +524,17 @@ impl<'a> VirtualMachine {
                         if u.borrow().is_open_at(self.current_frame().base_pointer + pos) {
                             let new_val = self.peek_stack(self.current_frame().base_pointer + pos);
                             u.replace(UpValRef::Closed(new_val.clone()));
+                            break;
+                        }
+                    }
+                }
+
+                OpCode::PopCloseUpVal => {
+                    let new_val = self.pop_stack();
+
+                    for u in self.up_values.iter() {
+                        if u.borrow().is_open_at(self.stack.len()) {
+                            u.replace(UpValRef::Closed(new_val));
                             break;
                         }
                     }

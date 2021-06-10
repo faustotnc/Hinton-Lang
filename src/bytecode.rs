@@ -46,6 +46,7 @@ pub enum OpCode {
     NotEq,
     NullishCoalescing,
     PopStackTop,
+    PopCloseUpVal,
     Subtract,
     EndVirtualMachine,
     Return,
@@ -62,7 +63,6 @@ pub enum OpCode {
     LoopJump,
     MakeArray,
     MakeTuple,
-    PopStackN,
     SetLocal,
     DefineGlobal,
     GetGlobal,
@@ -85,7 +85,6 @@ pub enum OpCode {
     MakeArrayLong,
     MakeTupleLong,
     PopJumpIfFalse,
-    PopStackNLong,
     SetLocalLong,
     DefineGlobalLong,
     GetGlobalLong,
@@ -421,6 +420,7 @@ pub fn disassemble_function_scope(chunk: &Chunk, name: &String) {
                 OpCode::NullishCoalescing => op_code_name = "NULLISH",
                 OpCode::PopStackTop => op_code_name = "POP_STACK_TOP",
                 OpCode::Subtract => op_code_name = "SUBTRACT",
+                OpCode::PopCloseUpVal => op_code_name = "POP_CLOSE_UP_VAL",
                 OpCode::EndVirtualMachine => op_code_name = "END_VIRTUAL_MACHINE",
                 OpCode::Return => op_code_name = "RETURN",
 
@@ -481,10 +481,6 @@ pub fn disassemble_function_scope(chunk: &Chunk, name: &String) {
                 }
                 OpCode::MakeTuple => {
                     op_code_name = "MAKE_TUPLE";
-                    get_operand(1);
-                }
-                OpCode::PopStackN => {
-                    op_code_name = "POP_STACK_N";
                     get_operand(1);
                 }
                 OpCode::SetLocal => {
@@ -576,10 +572,6 @@ pub fn disassemble_function_scope(chunk: &Chunk, name: &String) {
                     let offset = chunk.get_short(idx - 1).unwrap() as usize;
                     // `idx + 1` because at runtime, the IP points to the next instruction
                     operand_val = format!("{} (add {} to IP)", (idx + 1) + offset, offset);
-                }
-                OpCode::PopStackNLong => {
-                    op_code_name = "POP_STACK_N_LONG";
-                    get_operand(2);
                 }
                 OpCode::SetLocalLong => {
                     op_code_name = "SET_LOCAL_LONG";

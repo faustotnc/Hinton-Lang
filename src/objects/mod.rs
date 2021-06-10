@@ -301,6 +301,12 @@ impl Object {
                 // then they are equal in value.
                 a.min == b.min && a.max == b.max
             }
+            Object::Null => {
+                return match right {
+                    Object::Null => true,
+                    _ => false,
+                }
+            }
             _ => false,
         };
     }

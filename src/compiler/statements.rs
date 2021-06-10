@@ -191,25 +191,22 @@ impl Compiler {
             .pop_scope(scope, !is_func_body, true);
 
         if !is_func_body {
-            self.emit_pop_stack_n(popped_scope, token);
+            self.emit_stack_pops(popped_scope, token);
             self.current_func_scope_mut().scope_depth -= 1;
         }
     }
 
-    pub(super) fn emit_pop_stack_n(&mut self, symbols: Vec<bool>, token: &Token) {
+    pub(super) fn emit_stack_pops(&mut self, symbols: Vec<bool>, token: &Token) {
         let pos = (token.line_num, token.column_num);
 
-        let num_to_pop = symbols.len();
-
-        if num_to_pop < 256 {
-            self.emit_op_code_with_byte(OpCode::PopStackN, num_to_pop as u8, pos);
-        } else if num_to_pop < u16::MAX as usize {
-            self.emit_op_code_with_byte(OpCode::PopStackN, num_to_pop as u8, pos);
-        } else {
-            self.error_at_token(
-                token,
-                CompilerErrorType::MaxCapacity,
-                "Too many local variables to pop from the stack.",
+        for is_closed in symbols {
+            self.emit_op_code(
+                if is_closed {
+                    OpCode::PopCloseUpVal
+                } else {
+                    OpCode::PopStackTop
+                },
+                pos,
             );
         }
     }

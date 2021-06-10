@@ -186,7 +186,7 @@ impl Compiler {
         }
 
         // Emit the pop instructions
-        self.emit_pop_stack_n(popped_scope, &stmt.token);
+        self.emit_stack_pops(popped_scope, &stmt.token);
 
         // Jump out of the loop
         let break_pos = self.emit_jump(OpCode::JumpForward, &stmt.token);
