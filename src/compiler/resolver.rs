@@ -22,9 +22,9 @@ impl Compiler {
             return s;
         }
 
-        // If we are in a function within a function, then we also look for symbols
+        // If we are in a function within a block, then we also look for symbols
         // in the scope of the parent function to create upValues & closures.
-        if self.functions.len() > 2 {
+        if self.functions.len() > 1 {
             if let Ok(s) = self.resolve_up_value(token, reassign, self.functions.len() - 2) {
                 return s;
             }
@@ -206,7 +206,7 @@ impl Compiler {
     /// ## Returns
     /// * `Result<SymbolLoc, ()>` – The location (if found) and resolution type of the symbol.
     fn resolve_up_value(&mut self, token: &Token, reassign: bool, func_idx: usize) -> Result<SL, ()> {
-        if func_idx == 0 {
+        if func_idx == 0 && self.functions[0].scope_depth == 0 {
             return Err(());
         }
 
@@ -225,11 +225,13 @@ impl Compiler {
         }
 
         // Recursively look for the symbol in higher function scopes.
-        if let Ok(s) = self.resolve_up_value(token, reassign, func_idx - 1) {
-            return match s {
-                SL::UpValue(u, p) => self.add_up_value(token, func_idx + 1, u.symbol, p, false),
-                _ => unreachable!("SymbolLoc should have been an up_value symbol."),
-            };
+        if func_idx > 0 {
+            if let Ok(s) = self.resolve_up_value(token, reassign, func_idx - 1) {
+                return match s {
+                    SL::UpValue(u, p) => self.add_up_value(token, func_idx + 1, u.symbol, p, false),
+                    _ => unreachable!("SymbolLoc should have been an up_value symbol."),
+                };
+            }
         }
 
         return Err(());

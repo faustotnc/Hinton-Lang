@@ -48,9 +48,7 @@ impl Parser {
             self.parse_for_statement()
         } else if self.matches(&BREAK_KW) {
             let tok = self.previous.clone();
-
             self.consume(&SEMICOLON, "Expected ';' after break keyword.");
-
             return Some(BreakStmt(BreakStmtNode { token: tok.clone() }));
         } else if self.matches(&CONTINUE_KW) {
             todo!("Implement continue")

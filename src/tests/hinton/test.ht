@@ -154,3 +154,24 @@ func main() {
 main();
 assert_eq(globalOne(), "one");
 assert_eq(globalTwo(), "two");
+
+
+// Test closing over the loop variable
+// Reuse these global variables
+globalOne = null;
+globalTwo = null;
+
+for let a in 1..3 {
+    func closure() {
+        return a;
+    }
+
+    if (globalOne == null) {
+        globalOne = closure;
+    } else {
+        globalTwo = closure;
+    }
+}
+
+assert_eq(globalOne(), 1);
+assert_eq(globalTwo(), 2);

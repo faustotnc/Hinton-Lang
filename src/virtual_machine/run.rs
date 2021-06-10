@@ -99,7 +99,6 @@ impl<'a> VirtualMachine {
 
                 OpCode::JumpHasNextOrPop | OpCode::JumpHasNextOrPopLong => {
                     let jump = self.get_std_or_long_operand(OpCode::JumpHasNextOrPop);
-                    self.pop_stack(); // pop the current iterator item off the stack
 
                     match self.peek_stack(self.stack.len() - 1) {
                         Object::Iter(o) => {

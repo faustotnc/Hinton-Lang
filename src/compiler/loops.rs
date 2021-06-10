@@ -2,7 +2,7 @@ use super::{BreakScope, Compiler, LoopScope};
 use crate::{
     ast::{BreakStmtNode, ForStmtNode, WhileStmtNode},
     bytecode::OpCode,
-    compiler::{CompilerErrorType, Symbol, SymbolType},
+    compiler::{CompilerErrorType, LoopType, Symbol, SymbolType},
     lexer::tokens::Token,
 };
 
@@ -24,7 +24,7 @@ impl Compiler {
         let depth = self.relative_scope_depth() + 1;
         self.current_func_scope_mut().loops.push(LoopScope {
             position: loop_start,
-            loop_type: super::LoopType::While,
+            loop_type: LoopType::While,
             // +1 because we don't start the actual scope until the loop
             // body is being compiled, which occurs later in this function.
             scope_depth: depth,
@@ -72,7 +72,7 @@ impl Compiler {
         // Starts this loop's break scope
         self.current_func_scope_mut().loops.push(LoopScope {
             position: loop_start,
-            loop_type: super::LoopType::ForIn,
+            loop_type: LoopType::ForIn,
             // +1 because we don't start the actual scope until the loop
             // body is being compiled, which occurs later in this function.
             scope_depth: depth,
@@ -105,6 +105,22 @@ impl Compiler {
 
         // Compiles the loop's body
         self.compile_node(&stmt.body);
+
+        // Either pops the loop variable off the stack or lifts it
+        // as a closed UpValRef if it is captured by a function
+        // declared inside the loop.
+        if self
+            .current_function_scope()
+            .s_table
+            .symbols
+            .last()
+            .unwrap()
+            .is_captured
+        {
+            self.emit_op_code(OpCode::PopCloseUpVal, loop_line_info);
+        } else {
+            self.emit_op_code(OpCode::PopStackTop, loop_line_info);
+        }
 
         // +2 to count the jump instruction and its one operand
         let offset = (self.current_chunk().len() + 2) - loop_start;

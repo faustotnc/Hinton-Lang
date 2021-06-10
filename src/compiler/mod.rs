@@ -187,7 +187,7 @@ impl Compiler {
     }
 
     fn is_global_scope(&self) -> bool {
-        if self.functions.len() == 1 && self.current_function_scope().scope_depth == 0 {
+        if self.functions.len() == 1 && self.relative_scope_depth() == 0 {
             if let CompilerType::Script = self.compiler_type {
                 return true;
             }
