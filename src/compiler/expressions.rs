@@ -214,7 +214,7 @@ impl Compiler {
     pub(super) fn compile_var_reassignment_expr(&mut self, expr: &VarReassignmentExprNode) {
         let line_info = (expr.target.line_num, expr.target.column_num);
 
-        let res = match self.resolve_symbol(&expr.target, false) {
+        let res = match self.resolve_symbol(&expr.target, true) {
             SL::Global(s, p) => SL::Global(s, p),
             SL::Local(s, p) => SL::Local(s, p),
             SL::UpValue(u, p) => SL::UpValue(u, p),
@@ -251,6 +251,81 @@ impl Compiler {
 
         // Sets the new value (which will be on top of the stack)
         self.named_variable(&res, &expr.target, true);
+    }
+
+    /// Compiles an object property access expression.
+    ///
+    /// # Arguments
+    /// * `expr` – An object property access expression node.
+    pub(super) fn compile_object_getter_expr(&mut self, expr: &ObjectGetExprNode) {
+        self.compile_node(&expr.target);
+
+        let prop_name = Object::String(expr.getter.lexeme.clone());
+        let prop_lineno = (expr.getter.line_num, expr.getter.column_num);
+
+        // TODO: Should objects be frozen by default? Should we statically
+        // check that a property exists inside an object and prevent adding/removing
+        // properties at runtime?
+        if let Some(pos) = self.add_literal_to_pool(prop_name, &expr.getter, false) {
+            if pos < 256 {
+                self.emit_op_code_with_byte(OpCode::GetProp, pos as u8, prop_lineno);
+            } else {
+                self.emit_op_code_with_short(OpCode::GetPropLong, pos, prop_lineno);
+            }
+        }
+    }
+
+    /// Compiles an object property reassignment expression.
+    ///
+    /// # Arguments
+    /// * `expr` – An object property reassignment expression node.
+    pub(super) fn compile_object_setter_expr(&mut self, expr: &ObjectSetExprNode) {
+        self.compile_node(&expr.target);
+
+        let prop_name = Object::String(expr.setter.lexeme.clone());
+        let prop_lineno = (expr.setter.line_num, expr.setter.column_num);
+
+        // TODO: Should objects be frozen by default? Should we statically
+        // check that a property exists inside an object and prevent adding/removing
+        // properties at runtime?
+        if let Some(pos) = self.add_literal_to_pool(prop_name, &expr.setter, false) {
+            if let ReassignmentType::None = expr.opr_type {
+                // Proceed to directly reassign the variable.
+                self.compile_node(&expr.value);
+            } else {
+                // The expression `a.prop /= 2` expands to `a.prop = a.prop / 2`, so we
+                // must get the property's value onto the stack first.
+                self.compile_object_getter_expr(&ObjectGetExprNode {
+                    target: expr.target.clone(),
+                    getter: expr.setter.clone(),
+                });
+
+                // Then we push the other operand's value onto the stack
+                self.compile_node(&expr.value);
+
+                // Then compute the operation of the two operands.
+                match expr.opr_type {
+                    ReassignmentType::Plus => self.emit_op_code(OpCode::Add, prop_lineno),
+                    ReassignmentType::Minus => self.emit_op_code(OpCode::Subtract, prop_lineno),
+                    ReassignmentType::Div => self.emit_op_code(OpCode::Divide, prop_lineno),
+                    ReassignmentType::Mul => self.emit_op_code(OpCode::Multiply, prop_lineno),
+                    ReassignmentType::Expo => self.emit_op_code(OpCode::Expo, prop_lineno),
+                    ReassignmentType::Mod => self.emit_op_code(OpCode::Modulus, prop_lineno),
+                    ReassignmentType::ShiftL => self.emit_op_code(OpCode::BitwiseShiftLeft, prop_lineno),
+                    ReassignmentType::ShiftR => self.emit_op_code(OpCode::BitwiseShiftRight, prop_lineno),
+                    ReassignmentType::BitAnd => self.emit_op_code(OpCode::BitwiseAnd, prop_lineno),
+                    ReassignmentType::Xor => self.emit_op_code(OpCode::BitwiseXor, prop_lineno),
+                    ReassignmentType::BitOr => self.emit_op_code(OpCode::BitwiseOr, prop_lineno),
+                    ReassignmentType::None => {}
+                };
+            }
+
+            if pos < 256 {
+                self.emit_op_code_with_byte(OpCode::SetProp, pos as u8, prop_lineno);
+            } else {
+                self.emit_op_code_with_short(OpCode::SetPropLong, pos, prop_lineno);
+            }
+        }
     }
 
     /// Compiles an array literal expression.
@@ -323,11 +398,11 @@ impl Compiler {
         self.emit_op_code(OpCode::Indexing, expr.pos);
     }
 
-    /// Compiles a function call expression.
+    /// Compiles a function call or new instance expression.
     ///
     /// # Arguments
-    /// * `expr` – A function call expression node.
-    pub(super) fn compile_function_call_expr(&mut self, expr: &FunctionCallExprNode) {
+    /// * `expr` – A function call or new instance expression node.
+    pub(super) fn compile_instance_or_func_call_expr(&mut self, expr: &FunctionCallExprNode, instance: bool) {
         // Compile the call's identifier
         self.compile_node(&expr.target);
 
@@ -336,44 +411,11 @@ impl Compiler {
             self.compile_node(&arg.value);
         }
 
-        // Call the function at runtime
-        self.emit_op_code(OpCode::FuncCall, expr.pos);
-        self.emit_raw_byte(expr.args.len() as u8, expr.pos);
-    }
-
-    /// Emits a constant instruction and adds the related object to the constant pool
-    ///
-    /// # Arguments
-    /// * `obj` – A reference to the literal object being added to the pool.
-    /// * `token` – The object's original token.
-    /// * `load` – Whether or not we should also emit a LOAD_CONSTANT instruction.
-    pub(super) fn add_literal_to_pool(&mut self, obj: Object, token: &Token, load: bool) -> Option<u16> {
-        let constant_pos = self.current_chunk_mut().add_constant(obj);
-        let opr_pos = (token.line_num, token.column_num);
-
-        match constant_pos {
-            Ok(idx) => {
-                if load {
-                    if idx < 256 {
-                        self.emit_op_code(OpCode::LoadConstant, opr_pos);
-                        self.emit_raw_byte(idx as u8, opr_pos);
-                    } else {
-                        self.emit_op_code(OpCode::LoadConstantLong, opr_pos);
-                        self.emit_short(idx, opr_pos);
-                    }
-                }
-
-                Some(idx)
-            }
-            Err(_) => {
-                self.error_at_token(
-                    token,
-                    CompilerErrorType::MaxCapacity,
-                    "Too many constants in one chunk.",
-                );
-
-                None
-            }
+        // Call the function or create an instance at runtime
+        if instance {
+            self.emit_op_code_with_byte(OpCode::MakeInstance, expr.args.len() as u8, expr.pos);
+        } else {
+            self.emit_op_code_with_byte(OpCode::FuncCall, expr.args.len() as u8, expr.pos);
         }
     }
 }

@@ -83,7 +83,7 @@ impl<'a> Parser {
             // Returns the assignment expression of the corresponding type
             return match expr {
                 Some(node) => match node {
-                    // Variable re-assignment
+                    // Variable re-assignment.
                     Identifier(id) => Some(VarReassignment(VarReassignmentExprNode {
                         target: id.token,
                         opr_type,
@@ -91,9 +91,13 @@ impl<'a> Parser {
                         pos: (opr.line_num, opr.column_num),
                     })),
 
-                    // Reassignment of collection item (`a[1] *= 3`),
-                    // and reassignment of member access (`a.member += "hello"`)
-                    // should be handled here.
+                    // Object setter `object.property = value`.
+                    ObjectGetter(getter) => Some(ObjectSetter(ObjectSetExprNode {
+                        target: getter.target,
+                        setter: getter.getter,
+                        value: Box::new(rhs),
+                        opr_type,
+                    })),
 
                     // The assignment target is not valid
                     _ => {
@@ -547,7 +551,7 @@ impl<'a> Parser {
     fn parse_unary(&mut self) -> Option<ASTNode> {
         if self.matches(&LOGIC_NOT) || self.matches(&MINUS) || self.matches(&BIT_NOT) {
             let opr = self.previous.clone();
-            let expr = self.parse_primary();
+            let expr = self.parse_unary();
 
             let opr_type = if let LOGIC_NOT = opr.token_type {
                 UnaryExprType::LogicNeg
@@ -566,24 +570,34 @@ impl<'a> Parser {
                 opr_type,
             }));
         } else {
-            let expr = match self.parse_primary() {
-                Some(e) => e,
-                None => return None,
-            };
+            let mut expr = self.parse_primary();
 
-            let expr_token = self.previous.clone();
+            loop {
+                // Parse array indexing
+                if self.matches(&L_BRACKET) {
+                    expr = self.parse_subscripting(expr);
+                } else
+                // Parse function call
+                if self.matches(&L_PAREN) {
+                    expr = self.parse_function_call(expr);
+                } else
+                // Parse object getter
+                if self.matches(&DOT) {
+                    let target = match expr {
+                        Some(node) => Box::new(node),
+                        None => return None,
+                    };
 
-            // Parse array indexing
-            if self.matches(&L_BRACKET) {
-                return self.array_indexing(expr);
+                    self.consume(&&IDENTIFIER, "Expected property name after dot.");
+                    let getter = self.previous.clone();
+
+                    expr = Some(ObjectGetter(ObjectGetExprNode { target, getter }));
+                } else {
+                    break;
+                }
             }
 
-            // Parse function call
-            if self.matches(&L_PAREN) {
-                return self.construct_function_call(expr, &expr_token);
-            }
-
-            return Some(expr);
+            return expr;
         }
     }
 
@@ -634,7 +648,7 @@ impl<'a> Parser {
 
                     // If there is a comma after the first expression, then this becomes a tuple.
                     return if self.matches(&COMMA) {
-                        self.construct_tuple(start_token, expr)
+                        self.parse_tuple(start_token, expr)
                     } else {
                         self.consume(&R_PARENTHESIS, "Expected closing ')'.");
                         // For grouping expression, we don't wrap the inner expression inside an extra node.
@@ -649,6 +663,23 @@ impl<'a> Parser {
                 return Some(Identifier(IdentifierExprNode {
                     token: self.previous.clone(),
                 }));
+            }
+            NEW_KW => {
+                // For class instances, we parse a unary after the "new" keyword so that the instance can
+                // be parsed and compiled as a regular function call. The only purpose of the "new" keyword
+                // is to differentiate between a function call and a class instance in Hinton code.
+                let instance = match self.parse_unary() {
+                    Some(i) => i,
+                    None => return None, // could not parse instance
+                };
+
+                return match instance {
+                    ASTNode::FunctionCall(call) => Some(Instance(call)),
+                    _ => {
+                        self.error_at_current("Expected class instance.");
+                        None
+                    }
+                };
             }
             _ => {
                 self.error_at_previous("Unexpected token.");
@@ -794,7 +825,7 @@ impl<'a> Parser {
     ///
     /// ## Returns
     /// `Option<ASTNode>` – The expression's AST node.
-    fn construct_tuple(&mut self, start_token: Token, first: Option<ASTNode>) -> Option<ASTNode> {
+    fn parse_tuple(&mut self, start_token: Token, first: Option<ASTNode>) -> Option<ASTNode> {
         let first = match first {
             Some(node) => Box::new(node),
             None => return None, // The first expression is invalid.
@@ -815,7 +846,6 @@ impl<'a> Parser {
                 }
 
                 self.consume(&R_PARENTHESIS, "Expected ')' after tuple declaration.");
-
                 break;
             }
         }
@@ -830,10 +860,15 @@ impl<'a> Parser {
     ///
     /// ## Returns
     /// `Option<ASTNode>` – The expression's AST node.
-    fn array_indexing(&mut self, expr: ASTNode) -> Option<ASTNode> {
+    fn parse_subscripting(&mut self, expr: Option<ASTNode>) -> Option<ASTNode> {
+        let expr = match expr {
+            Some(e) => e,
+            None => return None,
+        };
+
         let pos = (self.previous.line_num, self.previous.column_num);
 
-        let mut expr = Some(ArrayIndexing(ArrayIndexingExprNode {
+        let expr = Some(ArrayIndexing(ArrayIndexingExprNode {
             target: Box::new(expr),
             index: match self.parse_expression() {
                 Some(e) => Box::new(e),
@@ -843,66 +878,63 @@ impl<'a> Parser {
         }));
 
         self.consume(&R_BRACKET, "Expected ']' after array index.");
-
-        // Keep matching chained array indexers
-        while self.matches(&L_BRACKET) {
-            let pos = (self.previous.line_num, self.previous.column_num);
-
-            expr = Some(ArrayIndexing(ArrayIndexingExprNode {
-                target: match expr {
-                    Some(e) => Box::new(e),
-                    None => return None,
-                },
-                index: match self.parse_expression() {
-                    Some(e) => Box::new(e),
-                    None => return None,
-                },
-                pos,
-            }));
-
-            self.consume(&R_BRACKET, "Expected ']' after array index.");
-        }
-
         return expr;
     }
 
-    fn construct_function_call(&mut self, name: ASTNode, token: &Token) -> Option<ASTNode> {
+    /// Parses an function call expression as specified in the grammar.bnf file.
+    ///
+    /// ## Returns
+    /// `Option<ASTNode>` – The expression's AST node.
+    fn parse_function_call(&mut self, name: Option<ASTNode>) -> Option<ASTNode> {
+        let name = match name {
+            Some(e) => e,
+            None => return None,
+        };
+
+        let pos = (self.previous.line_num, self.previous.column_num);
         let mut args: Vec<Argument> = vec![];
 
-        while !self.matches(&R_PARENTHESIS) {
-            if args.len() >= 255 {
-                self.error_at_current("Can't have more than 255 arguments.");
-                return None;
-            }
-
-            match self.parse_argument() {
-                Some(a) => {
-                    if args.len() > 0 && !a.is_named && args.last().unwrap().is_named {
-                        self.error_at_previous(
-                            "Optional and named parameters must be declared after all required parameters.",
-                        );
-                        return None;
-                    }
-
-                    args.push(a);
+        if !self.matches(&R_PARENTHESIS) {
+            loop {
+                if args.len() >= 255 {
+                    self.error_at_current("Can't have more than 255 arguments.");
+                    return None;
                 }
-                None => return None, // Could not parse the parameter
-            }
 
-            if !self.matches(&R_PARENTHESIS) {
-                self.consume(&COMMA, "Expected comma after parameter.");
-            } else {
+                match self.parse_argument() {
+                    Some(a) => {
+                        if args.len() > 0 && !a.is_named && args.last().unwrap().is_named {
+                            self.error_at_previous(
+                                "Named arguments must be declared after all unnamed arguments.",
+                            );
+                            return None;
+                        }
+
+                        args.push(a);
+                    }
+                    None => return None, // Could not parse the argument
+                }
+
+                if self.matches(&COMMA) {
+                    continue;
+                }
+
+                self.consume(&&R_PARENTHESIS, "Expected ')' after arguments.");
                 break;
             }
         }
 
-        return Some(FunctionCallExpr(FunctionCallExprNode {
+        Some(FunctionCall(FunctionCallExprNode {
             target: Box::new(name),
             args,
-            pos: (token.line_num, token.column_num),
-        }));
+            pos,
+        }))
     }
 
+    /// Parses a function argument expression as specified in the grammar.bnf file.
+    ///
+    /// ## Returns
+    /// `Option<ASTNode>` – The expression's AST node.
     fn parse_argument(&mut self) -> Option<Argument> {
         let expr = match self.parse_expression() {
             Some(e) => e,

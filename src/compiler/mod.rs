@@ -1,11 +1,11 @@
 use self::symbols::{Symbol, SymbolTable, SymbolType};
 use crate::{
     ast::*,
-    bytecode::{self, Chunk},
+    bytecode::{self, Chunk, OpCode},
     errors::CompilerErrorType,
     errors::ErrorReport,
     lexer::tokens::Token,
-    objects::FuncObject,
+    objects::{FuncObject, Object},
 };
 use std::{convert::TryFrom, str, vec};
 
@@ -161,15 +161,19 @@ impl Compiler {
             ASTNode::Binary(x) => self.compile_binary_expr(x),
             ASTNode::BlockStmt(x) => self.compile_block_stmt(x),
             ASTNode::BreakStmt(x) => self.compile_break_stmt(x),
+            ASTNode::ClassDecl(x) => self.compile_class_declaration(x),
             ASTNode::ConstantDecl(x) => self.compile_constant_decl(x),
             ASTNode::ExpressionStmt(x) => self.compile_expression_stmt(x),
             ASTNode::ForStmt(x) => self.compile_for_stmt(x),
-            ASTNode::FunctionCallExpr(x) => self.compile_function_call_expr(x),
+            ASTNode::FunctionCall(x) => self.compile_instance_or_func_call_expr(x, false),
             ASTNode::FunctionDecl(x) => self.compile_function_decl(x),
             ASTNode::Identifier(x) => self.compile_identifier_expr(x),
             ASTNode::IfStmt(x) => self.compile_if_stmt(x),
+            ASTNode::Instance(x) => self.compile_instance_or_func_call_expr(x, true),
             ASTNode::Literal(x) => self.compile_literal_expr(x),
             ASTNode::Module(x) => self.compile_module_node(x),
+            ASTNode::ObjectGetter(x) => self.compile_object_getter_expr(x),
+            ASTNode::ObjectSetter(x) => self.compile_object_setter_expr(x),
             ASTNode::ReturnStmt(x) => self.compile_return_stmt(x),
             ASTNode::TernaryConditional(x) => self.compile_ternary_conditional_expr(x),
             ASTNode::Tuple(x) => self.compile_tuple_expr(x),
@@ -341,6 +345,42 @@ impl Compiler {
             self.emit_short(jump, line_info);
         } else {
             return self.error_at_token(token, CompilerErrorType::MaxCapacity, "Loop body too large.");
+        }
+    }
+
+    /// Emits a constant instruction and adds the related object to the constant pool
+    ///
+    /// # Arguments
+    /// * `obj` – A reference to the literal object being added to the pool.
+    /// * `token` – The object's original token.
+    /// * `load` – Whether or not we should also emit a LOAD_CONSTANT instruction.
+    pub fn add_literal_to_pool(&mut self, obj: Object, token: &Token, load: bool) -> Option<u16> {
+        let constant_pos = self.current_chunk_mut().add_constant(obj);
+        let opr_pos = (token.line_num, token.column_num);
+
+        match constant_pos {
+            Ok(idx) => {
+                if load {
+                    if idx < 256 {
+                        self.emit_op_code(OpCode::LoadConstant, opr_pos);
+                        self.emit_raw_byte(idx as u8, opr_pos);
+                    } else {
+                        self.emit_op_code(OpCode::LoadConstantLong, opr_pos);
+                        self.emit_short(idx, opr_pos);
+                    }
+                }
+
+                Some(idx)
+            }
+            Err(_) => {
+                self.error_at_token(
+                    token,
+                    CompilerErrorType::MaxCapacity,
+                    "Too many constants in one chunk.",
+                );
+
+                None
+            }
         }
     }
 

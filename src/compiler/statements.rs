@@ -272,4 +272,29 @@ impl Compiler {
             self.patch_jump(else_jump, &stmt.else_token.clone().unwrap());
         }
     }
+
+    /// Compiles a class declaration statement.
+    ///
+    /// * `decl` – The class declaration statement node being compiled.
+    pub(super) fn compile_class_declaration(&mut self, decl: &ClassDeclNode) {
+        if let Ok(symbol_pos) = self.declare_symbol(&decl.name, SymbolType::Class) {
+            let str_name = Object::String(decl.name.lexeme.clone());
+            let name_line_info = (decl.name.line_num, decl.name.column_num);
+
+            if let Some(name_pool_pos) = self.add_literal_to_pool(str_name, &decl.name, false) {
+                if name_pool_pos < 256 {
+                    self.emit_op_code_with_byte(OpCode::MakeClass, name_pool_pos as u8, name_line_info)
+                } else {
+                    self.emit_op_code_with_short(OpCode::MakeClass, name_pool_pos, name_line_info)
+                }
+
+                // If we are in the global scope, declarations are
+                // stored in the VM.globals hashmap
+                if self.is_global_scope() {
+                    self.define_as_global(&decl.name);
+                    self.globals.mark_initialized(symbol_pos);
+                }
+            }
+        }
+    }
 }

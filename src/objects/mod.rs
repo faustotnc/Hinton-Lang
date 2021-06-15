@@ -1,5 +1,5 @@
 use crate::{bytecode::Chunk, natives::NativeFn};
-use std::{cell::RefCell, fmt, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 // Submodules
 mod indexing;
@@ -79,6 +79,17 @@ impl UpValRef {
     }
 }
 
+#[derive(Clone)]
+pub struct ClassObject {
+    pub name: String,
+}
+
+#[derive(Clone)]
+pub struct InstanceObject {
+    pub class: ClassObject,
+    pub fields: HashMap<String, Object>,
+}
+
 /// All types of objects in Hinton
 #[derive(Clone)]
 pub enum Object {
@@ -92,6 +103,8 @@ pub enum Object {
     Range(RangeObject),
     String(String),
     Tuple(Vec<Object>),
+    Class(ClassObject),
+    Instance(InstanceObject),
 
     // Internal
     Closure(ClosureObject),
@@ -111,6 +124,8 @@ impl Object {
             &Self::Range(_) => "Range",
             &Self::String(_) => "String",
             &Self::Tuple(_) => "Tuple",
+            Self::Class(c) => c.name.as_str(),
+            Self::Instance(i) => i.class.name.as_str(),
         };
     }
 
@@ -393,6 +408,10 @@ impl<'a> fmt::Display for Object {
                 };
 
                 fmt::Display::fmt(&str, f)
+            }
+            Object::Class(ref inner) => fmt::Display::fmt(&format!("<Class '{}'>", inner.name), f),
+            Object::Instance(ref inner) => {
+                fmt::Display::fmt(&format!("<Instance of '{}'>", inner.class.name), f)
             }
             Object::Native(ref inner) => {
                 let str = format!("<NativeFn '{}'>", inner.name);

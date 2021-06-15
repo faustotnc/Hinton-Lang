@@ -22,6 +22,8 @@ impl Parser {
             self.parse_func_declaration()
         } else if self.matches(&ENUM_KW) {
             todo!("Implement enum declarations")
+        } else if self.matches(&CLASS_KW) {
+            self.parse_class_declaration()
         } else {
             self.parse_statement()
         };
@@ -474,5 +476,19 @@ impl Parser {
             token: tok,
             value: None,
         }));
+    }
+
+    /// Parses a class declaration statement as specified in the grammar.bnf file.
+    ///
+    /// Returns
+    /// * `Option<ASTNode>` – A class declaration statement AST node.
+    fn parse_class_declaration(&mut self) -> Option<ASTNode> {
+        self.consume(&IDENTIFIER, "Expected a class name.");
+        let name = self.previous.clone();
+
+        self.consume(&L_CURLY, "Expected '{' before class body.");
+        self.consume(&R_CURLY, "Expected '}' after class body.");
+
+        return Some(ClassDecl(ClassDeclNode { name }));
     }
 }

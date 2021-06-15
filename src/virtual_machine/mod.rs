@@ -6,7 +6,7 @@ use crate::{
     compiler::Compiler,
     errors::{report_errors_list, report_runtime_error, RuntimeErrorType},
     exec_time, natives,
-    objects::{self, ClosureObject, FuncObject, Object, UpValRef},
+    objects::{self, ClosureObject, FuncObject, InstanceObject, Object, UpValRef},
     parser::Parser,
     FRAMES_MAX,
 };
@@ -31,30 +31,30 @@ pub struct CallFrame {
 }
 
 impl CallFrame {
-    fn peek_current_op_code(&self) -> Option<OpCode> {
+    fn peek_current_op_code(&self) -> OpCode {
         self.closure.function.chunk.get_op_code(self.ip - 1)
     }
 
-    fn get_next_op_code(&mut self) -> Option<OpCode> {
+    fn get_next_op_code(&mut self) -> OpCode {
         let code = self.closure.function.chunk.get_op_code(self.ip);
         self.ip += 1;
         return code;
     }
 
-    fn get_next_byte(&mut self) -> Option<u8> {
+    fn get_next_byte(&mut self) -> u8 {
         let code = self.closure.function.chunk.get_byte(self.ip);
         self.ip += 1;
         return code;
     }
 
-    fn get_next_short(&mut self) -> Option<u16> {
+    fn get_next_short(&mut self) -> u16 {
         let next_short = self.closure.function.chunk.get_short(self.ip);
         self.ip += 2;
         return next_short;
     }
 
     fn get_constant(&self, idx: usize) -> &Object {
-        self.closure.function.chunk.get_constant(idx).unwrap()
+        self.closure.function.chunk.get_constant(idx)
     }
 }
 
@@ -165,15 +165,15 @@ impl VirtualMachine {
         &mut self.frames[frames_len - 1]
     }
 
-    fn get_next_op_code(&mut self) -> Option<OpCode> {
+    fn get_next_op_code(&mut self) -> OpCode {
         self.current_frame_mut().get_next_op_code()
     }
 
-    fn get_next_byte(&mut self) -> Option<u8> {
+    fn get_next_byte(&mut self) -> u8 {
         self.current_frame_mut().get_next_byte()
     }
 
-    fn get_next_short(&mut self) -> Option<u16> {
+    fn get_next_short(&mut self) -> u16 {
         self.current_frame_mut().get_next_short()
     }
 
@@ -200,6 +200,23 @@ impl VirtualMachine {
 
     fn read_constant(&self, idx: usize) -> &Object {
         return self.current_frame().get_constant(idx);
+    }
+
+    /// Either gets the next byte or the next short based on the instruction.
+    /// If the current instruction matches the instruction corresponding to
+    /// a one-byte operand, then this function returns the next byte as `usize`,
+    /// otherwise it will return the next two bytes a `usize`.
+    ///
+    /// ## Arguments
+    /// * `op` – The instructions corresponding to a one-byte operand.
+    fn get_std_or_long_operand(&mut self, op: OpCode) -> usize {
+        // The compiler makes sure that the structure of the bytecode is correct
+        // for the VM to execute, so unwrapping without check should be fine.
+        if op == self.current_frame_mut().peek_current_op_code() {
+            self.get_next_byte() as usize
+        } else {
+            self.get_next_short() as usize
+        }
     }
 
     fn call_value(&mut self, callee: Object, arg_count: u8) -> RuntimeResult {
@@ -233,7 +250,7 @@ impl VirtualMachine {
     }
 
     fn call_function(&mut self, callee: FuncObject, arg_count: u8) -> RuntimeResult {
-        if let Err(e) = self.verify_fn(&callee, arg_count) {
+        if let Err(e) = self.verify_call(&callee, arg_count) {
             return e;
         }
 
@@ -252,7 +269,7 @@ impl VirtualMachine {
     }
 
     fn call_closure(&mut self, callee: ClosureObject, arg_count: u8) -> RuntimeResult {
-        if let Err(e) = self.verify_fn(&callee.function, arg_count) {
+        if let Err(e) = self.verify_call(&callee.function, arg_count) {
             return e;
         }
 
@@ -267,7 +284,30 @@ impl VirtualMachine {
         RuntimeResult::Ok
     }
 
-    fn verify_fn(&mut self, function: &FuncObject, arg_count: u8) -> Result<(), RuntimeResult> {
+    fn create_instance(&mut self, callee: Object, arg_count: u8) -> RuntimeResult {
+        let new_instance = Object::Instance(InstanceObject {
+            class: match callee {
+                Object::Class(c) => c,
+                _ => {
+                    return RuntimeResult::Error {
+                        error: RuntimeErrorType::InstanceError,
+                        message: format!(
+                            "Cannot create instance from object of type '{}'.",
+                            callee.type_name()
+                        ),
+                    }
+                }
+            },
+            fields: HashMap::new(),
+        });
+
+        let class_pos = self.stack.len() - (arg_count as usize) - 1;
+        self.stack[class_pos] = new_instance;
+
+        RuntimeResult::Ok
+    }
+
+    fn verify_call(&mut self, function: &FuncObject, arg_count: u8) -> Result<(), RuntimeResult> {
         let max_arity = function.max_arity;
         let min_arity = function.min_arity;
 
@@ -324,8 +364,6 @@ impl VirtualMachine {
         self.up_values.push(new_up_val.clone());
         new_up_val
     }
-
-    // fn close_up_value(&mut self, index: usize) -> UpValRef {}
 
     /// Prints the execution trace for the program. Useful for debugging the VM.
     ///

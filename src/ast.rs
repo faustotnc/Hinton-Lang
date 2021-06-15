@@ -6,17 +6,21 @@ pub enum ASTNode {
 
     // Expressions
     Array(ArrayExprNode),
-    Tuple(TupleExprNode),
     ArrayIndexing(ArrayIndexingExprNode),
     Binary(BinaryExprNode),
-    FunctionCallExpr(FunctionCallExprNode),
+    FunctionCall(FunctionCallExprNode),
     Identifier(IdentifierExprNode),
     Literal(LiteralExprNode),
+    ObjectGetter(ObjectGetExprNode),
+    ObjectSetter(ObjectSetExprNode),
     TernaryConditional(TernaryConditionalNode),
+    Tuple(TupleExprNode),
     Unary(UnaryExprNode),
     VarReassignment(VarReassignmentExprNode),
+    Instance(FunctionCallExprNode),
 
     // Declarations
+    ClassDecl(ClassDeclNode),
     ConstantDecl(ConstantDeclNode),
     FunctionDecl(FunctionDeclNode),
     VariableDecl(VariableDeclNode),
@@ -254,4 +258,23 @@ pub struct Argument {
 pub struct ReturnStmtNode {
     pub token: Token,
     pub value: Option<Box<ASTNode>>,
+}
+
+#[derive(Clone)]
+pub struct ClassDeclNode {
+    pub name: Token,
+}
+
+#[derive(Clone)]
+pub struct ObjectGetExprNode {
+    pub target: Box<ASTNode>,
+    pub getter: Token,
+}
+
+#[derive(Clone)]
+pub struct ObjectSetExprNode {
+    pub target: Box<ASTNode>,
+    pub setter: Token,
+    pub value: Box<ASTNode>,
+    pub opr_type: ReassignmentType,
 }

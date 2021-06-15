@@ -11,15 +11,16 @@ pub struct ErrorReport {
 /// Represents the types of errors that can occur during
 /// execution of the compiled bytecode.
 pub enum RuntimeErrorType {
-    IndexError,
-    StopIteration,
-    Internal,
-    TypeError,
-    ZeroDivision,
     ArgumentError,
+    AssertionError,
+    IndexError,
+    InstanceError,
+    Internal,
     RecursionError,
     ReferenceError,
-    AssertionError,
+    StopIteration,
+    TypeError,
+    ZeroDivision,
 }
 
 /// Represents the types of errors that can occur during compilation
@@ -141,6 +142,7 @@ pub fn report_runtime_error(vm: &VirtualMachine, error: RuntimeErrorType, messag
         RuntimeErrorType::ArgumentError => "ArgumentError",
         RuntimeErrorType::AssertionError => "AssertionError",
         RuntimeErrorType::IndexError => "IndexError",
+        RuntimeErrorType::InstanceError => "InstanceError",
         RuntimeErrorType::Internal => "InternalError",
         RuntimeErrorType::RecursionError => "RecursionError",
         RuntimeErrorType::ReferenceError => "ReferenceError",

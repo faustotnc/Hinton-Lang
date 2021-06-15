@@ -4,7 +4,7 @@ use super::{RuntimeErrorType, RuntimeResult, VirtualMachine};
 use crate::{
     bytecode::OpCode,
     natives::{self, get_next_in_iter, iter_has_next, make_iter},
-    objects::{ClosureObject, Object, RangeObject, UpValRef},
+    objects::{ClassObject, ClosureObject, Object, RangeObject, UpValRef},
 };
 
 impl<'a> VirtualMachine {
@@ -15,7 +15,9 @@ impl<'a> VirtualMachine {
     /// ## Returns
     /// `InterpretResult` – The result of the execution.
     pub(crate) fn run(&mut self) -> RuntimeResult {
-        while let Some(instruction) = self.get_next_op_code() {
+        loop {
+            let instruction = self.get_next_op_code();
+
             match instruction {
                 OpCode::LoadImmNull => self.push_stack(Object::Null),
                 OpCode::LoadImmTrue => self.push_stack(Object::Bool(true)),
@@ -375,7 +377,7 @@ impl<'a> VirtualMachine {
 
                 OpCode::PopJumpIfFalse => {
                     // The POP_JUMP_IF_FALSE instruction always has a short as its operand.
-                    let offset = self.get_next_short().unwrap() as usize;
+                    let offset = self.get_next_short() as usize;
 
                     if self.pop_stack().is_falsey() {
                         self.current_frame_mut().ip += offset;
@@ -384,7 +386,7 @@ impl<'a> VirtualMachine {
 
                 OpCode::JumpIfFalseOrPop => {
                     // The JUMP_IF_FALSE_OR_POP instruction always has a short as its operand.
-                    let offset = self.get_next_short().unwrap() as usize;
+                    let offset = self.get_next_short() as usize;
 
                     if self.peek_stack(self.stack.len() - 1).is_falsey() {
                         self.current_frame_mut().ip += offset;
@@ -395,7 +397,7 @@ impl<'a> VirtualMachine {
 
                 OpCode::JumpIfTrueOrPop => {
                     // The JUMP_IF_TRUE_OR_POP instruction always has a short as its operand.
-                    let offset = self.get_next_short().unwrap() as usize;
+                    let offset = self.get_next_short() as usize;
 
                     if !self.peek_stack(self.stack.len() - 1).is_falsey() {
                         self.current_frame_mut().ip += offset;
@@ -406,7 +408,7 @@ impl<'a> VirtualMachine {
 
                 OpCode::JumpForward => {
                     // The JUMP_FORWARD instruction always has a short as its operand.
-                    let offset = self.get_next_short().unwrap() as usize;
+                    let offset = self.get_next_short() as usize;
                     self.current_frame_mut().ip += offset;
                 }
 
@@ -429,7 +431,7 @@ impl<'a> VirtualMachine {
 
                 OpCode::FuncCall => {
                     // Functions can only have 255-MAX parameters
-                    let arg_count = self.get_next_byte().unwrap();
+                    let arg_count = self.get_next_byte();
 
                     let maybe_function = self
                         .peek_stack(self.stack.len() - (arg_count as usize) - 1)
@@ -454,8 +456,8 @@ impl<'a> VirtualMachine {
                     let mut up_values: Vec<Rc<RefCell<UpValRef>>> = Vec::with_capacity(function.up_val_count);
 
                     for _ in 0..(function.up_val_count) {
-                        let is_local = self.get_next_byte().unwrap() == 1u8;
-                        let index = self.get_next_byte().unwrap() as usize;
+                        let is_local = self.get_next_byte() == 1u8;
+                        let index = self.get_next_byte() as usize;
 
                         let up = if is_local {
                             self.create_up_value(self.current_frame().base_pointer + index)
@@ -480,8 +482,8 @@ impl<'a> VirtualMachine {
                     let mut up_values: Vec<Rc<RefCell<UpValRef>>> = Vec::with_capacity(function.up_val_count);
 
                     for _ in 0..(function.up_val_count) {
-                        let is_local = self.get_next_byte().unwrap() == 1u8;
-                        let index = self.get_next_short().unwrap() as usize;
+                        let is_local = self.get_next_byte() == 1u8;
+                        let index = self.get_next_short() as usize;
 
                         let up = if is_local {
                             self.create_up_value(self.current_frame().base_pointer + index)
@@ -541,7 +543,7 @@ impl<'a> VirtualMachine {
 
                 OpCode::BindDefaults => {
                     // Functions can only have 255-MAX parameters
-                    let param_count = self.get_next_byte().unwrap();
+                    let param_count = self.get_next_byte();
 
                     let mut defaults: Vec<Object> = vec![];
                     for _ in 0..param_count {
@@ -575,6 +577,83 @@ impl<'a> VirtualMachine {
                     self.push_stack(result);
                 }
 
+                OpCode::MakeClass | OpCode::MakeClassLong => {
+                    let pos = self.get_std_or_long_operand(OpCode::MakeClass);
+
+                    let name = match self.read_constant(pos).clone() {
+                        Object::String(s) => s,
+                        _ => unreachable!("Expected string for class name."),
+                    };
+
+                    let new_class = Object::Class(ClassObject { name });
+                    self.push_stack(new_class);
+                }
+
+                OpCode::MakeInstance => {
+                    // Instances can only have 255-MAX arguments
+                    let arg_count = self.get_next_byte();
+
+                    let maybe_instance = self
+                        .peek_stack(self.stack.len() - (arg_count as usize) - 1)
+                        .clone();
+
+                    match self.create_instance(maybe_instance, arg_count) {
+                        RuntimeResult::Ok => {}
+                        RuntimeResult::Error { error, message } => {
+                            return RuntimeResult::Error { error, message }
+                        }
+                    }
+                }
+
+                OpCode::GetProp | OpCode::GetPropLong => {
+                    let pos = self.get_std_or_long_operand(OpCode::GetProp);
+
+                    let prop_name = match self.read_constant(pos).clone() {
+                        Object::String(name) => name,
+                        _ => unreachable!("Expected string for 'GetProp' name."),
+                    };
+
+                    match self.pop_stack() {
+                        Object::Instance(x) => {
+                            if x.fields.contains_key(&prop_name) {
+                                let val = x.fields.get(&prop_name).unwrap().clone();
+                                self.push_stack(val);
+                            } else {
+                                return RuntimeResult::Error {
+                                    error: RuntimeErrorType::ReferenceError,
+                                    message: format!(
+                                        "Property '{}' not defined for object of type '{}'.",
+                                        prop_name, x.class.name
+                                    ),
+                                };
+                            }
+                        }
+                        _ => todo!("Other objects also have properties."),
+                    }
+                }
+
+                OpCode::SetProp | OpCode::SetPropLong => {
+                    let pos = self.get_std_or_long_operand(OpCode::SetProp);
+
+                    let prop_name = match self.read_constant(pos).clone() {
+                        Object::String(name) => name,
+                        _ => unreachable!("Expected string for 'SetProp' name."),
+                    };
+
+                    let value = self.pop_stack();
+
+                    match self.pop_stack() {
+                        // TODO: This does not actually modify the instance object assigned to
+                        // a variable. It only modifies the cloned instance that is currently
+                        // on top of the stack. We need a heap to store class instances.
+                        Object::Instance(mut x) => {
+                            x.fields.insert(prop_name, value.clone());
+                            self.push_stack(value);
+                        }
+                        _ => todo!("Other objects also have properties."),
+                    }
+                }
+
                 OpCode::EndVirtualMachine => {
                     self.pop_stack(); // Remove the main function off the stack
                     self.frames.pop();
@@ -584,28 +663,6 @@ impl<'a> VirtualMachine {
 
             // Prints the execution of the program.
             // self.print_execution(instruction);
-        }
-
-        // If the compiler reaches this point, that means there were no errors
-        // to return (because errors are returned by the match rules), so we can
-        // safely return an `INTERPRET_OK` result.
-        return RuntimeResult::Ok;
-    }
-
-    /// Either gets the next byte or the next short based on the instruction.
-    /// If the current instruction matches the instruction corresponding to
-    /// a one-byte operand, then this function returns the next byte as `usize`,
-    /// otherwise it will return the next two bytes a `usize`.
-    ///
-    /// ## Arguments
-    /// * `op` – The instructions corresponding to a one-byte operand.
-    fn get_std_or_long_operand(&mut self, op: OpCode) -> usize {
-        // The compiler makes sure that the structure of the bytecode is correct
-        // for the VM to execute, so unwrapping without check should be fine.
-        if op == self.current_frame_mut().peek_current_op_code().unwrap() {
-            self.get_next_byte().unwrap() as usize
-        } else {
-            self.get_next_short().unwrap() as usize
         }
     }
 }
