@@ -32,29 +32,29 @@ pub struct CallFrame {
 
 impl CallFrame {
     fn peek_current_op_code(&self) -> OpCode {
-        self.closure.function.chunk.get_op_code(self.ip - 1)
+        self.closure.function.borrow().chunk.get_op_code(self.ip - 1)
     }
 
     fn get_next_op_code(&mut self) -> OpCode {
-        let code = self.closure.function.chunk.get_op_code(self.ip);
+        let code = self.closure.function.borrow().chunk.get_op_code(self.ip);
         self.ip += 1;
         return code;
     }
 
     fn get_next_byte(&mut self) -> u8 {
-        let code = self.closure.function.chunk.get_byte(self.ip);
+        let code = self.closure.function.borrow().chunk.get_byte(self.ip);
         self.ip += 1;
         return code;
     }
 
     fn get_next_short(&mut self) -> u16 {
-        let next_short = self.closure.function.chunk.get_short(self.ip);
+        let next_short = self.closure.function.borrow().chunk.get_short(self.ip);
         self.ip += 2;
         return next_short;
     }
 
-    fn get_constant(&self, idx: usize) -> &Object {
-        self.closure.function.chunk.get_constant(idx)
+    fn get_constant(&self, idx: usize) -> Object {
+        self.closure.function.borrow().chunk.get_constant(idx).clone()
     }
 }
 
@@ -113,8 +113,9 @@ impl VirtualMachine {
         };
 
         // Executes the program
-        _self.stack.push(Object::Function(module.clone()));
-        return match _self.call_function(module, 0) {
+        let f = Rc::new(RefCell::new(module));
+        _self.stack.push(Object::Function(f.clone()));
+        return match _self.call_function(f, 0) {
             RuntimeResult::Ok => {
                 #[cfg(feature = "bench_time")]
                 let start = Instant::now();
@@ -198,7 +199,7 @@ impl VirtualMachine {
         &mut self.stack[pos]
     }
 
-    fn read_constant(&self, idx: usize) -> &Object {
+    fn read_constant(&self, idx: usize) -> Object {
         return self.current_frame().get_constant(idx);
     }
 
@@ -249,12 +250,12 @@ impl VirtualMachine {
         };
     }
 
-    fn call_function(&mut self, callee: FuncObject, arg_count: u8) -> RuntimeResult {
-        if let Err(e) = self.verify_call(&callee, arg_count) {
+    fn call_function(&mut self, callee: Rc<RefCell<FuncObject>>, arg_count: u8) -> RuntimeResult {
+        if let Err(e) = self.verify_call(&callee.borrow(), arg_count) {
             return e;
         }
 
-        let max_arity = callee.max_arity as usize;
+        let max_arity = callee.borrow().max_arity as usize;
 
         self.frames.push(CallFrame {
             closure: ClosureObject {
@@ -269,11 +270,11 @@ impl VirtualMachine {
     }
 
     fn call_closure(&mut self, callee: ClosureObject, arg_count: u8) -> RuntimeResult {
-        if let Err(e) = self.verify_call(&callee.function, arg_count) {
+        if let Err(e) = self.verify_call(&callee.function.borrow(), arg_count) {
             return e;
         }
 
-        let max_arity = callee.function.max_arity as usize;
+        let max_arity = callee.function.borrow().max_arity as usize;
 
         self.frames.push(CallFrame {
             closure: callee,
@@ -285,7 +286,7 @@ impl VirtualMachine {
     }
 
     fn create_instance(&mut self, callee: Object, arg_count: u8) -> RuntimeResult {
-        let new_instance = Object::Instance(InstanceObject {
+        let inst = Rc::new(RefCell::new(InstanceObject {
             class: match callee {
                 Object::Class(c) => c,
                 _ => {
@@ -299,7 +300,9 @@ impl VirtualMachine {
                 }
             },
             fields: HashMap::new(),
-        });
+        }));
+
+        let new_instance = Object::Instance(inst);
 
         let class_pos = self.stack.len() - (arg_count as usize) - 1;
         self.stack[class_pos] = new_instance;

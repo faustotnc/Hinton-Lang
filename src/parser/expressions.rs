@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use super::Parser;
 use crate::{
     ast::ASTNode::*,
@@ -714,7 +716,7 @@ impl<'a> Parser {
             .replace("\\\"", "\"");
 
         // Emits the constant instruction
-        return Object::String(lexeme);
+        return Object::String(Rc::new(RefCell::new(lexeme)));
     }
 
     /// Compiles an integer token to a Hinton Int.

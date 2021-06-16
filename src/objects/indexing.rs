@@ -1,14 +1,14 @@
-use crate::errors::ObjectOprErrType;
-
 use super::{Object, RangeObject};
+use crate::errors::ObjectOprErrType;
+use std::{cell::RefCell, rc::Rc};
 
 impl Object {
     /// Defines the indexing operation of Hinton objects.
     pub fn get_at_index(&self, index: &Object) -> Result<Object, ObjectOprErrType> {
         match self {
-            Object::Array(arr) => index_array(arr, index),
-            Object::Tuple(tup) => index_tuple(tup, index),
-            Object::String(str) => index_string(str, index),
+            Object::Array(arr) => index_array(&arr.borrow(), index),
+            Object::Tuple(tup) => index_tuple(&tup.tup, index),
+            Object::String(str) => index_string(&*str.borrow(), index),
             Object::Range(range) => index_range(range, index),
             _ => {
                 return Err(ObjectOprErrType::TypeError(format!(
@@ -149,7 +149,8 @@ fn index_string(str: &String, index: &Object) -> Result<Object, ObjectOprErrType
 
             if let Some(pos) = to_bounded_index(idx, chars.len()) {
                 if let Some(val) = chars.get(pos) {
-                    return Ok(Object::String(val.to_string()));
+                    let val = Rc::new(RefCell::new(val.to_string()));
+                    return Ok(Object::String(val));
                 }
             }
         }
@@ -159,7 +160,8 @@ fn index_string(str: &String, index: &Object) -> Result<Object, ObjectOprErrType
             let pos = (if *val { 1 } else { 0 }) as usize;
 
             if let Some(val) = chars.get(pos) {
-                return Ok(Object::String(val.to_string()));
+                let val = Rc::new(RefCell::new(val.to_string()));
+                return Ok(Object::String(val));
             }
         }
         // Indexing type: String[Range]

@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use super::{Compiler, CompilerErrorType};
 use crate::{ast::*, bytecode::OpCode, compiler::symbols::SL, lexer::tokens::Token, objects::Object};
 
@@ -260,7 +262,7 @@ impl Compiler {
     pub(super) fn compile_object_getter_expr(&mut self, expr: &ObjectGetExprNode) {
         self.compile_node(&expr.target);
 
-        let prop_name = Object::String(expr.getter.lexeme.clone());
+        let prop_name = Object::String(Rc::new(RefCell::new(expr.getter.lexeme.clone())));
         let prop_lineno = (expr.getter.line_num, expr.getter.column_num);
 
         // TODO: Should objects be frozen by default? Should we statically
@@ -282,7 +284,7 @@ impl Compiler {
     pub(super) fn compile_object_setter_expr(&mut self, expr: &ObjectSetExprNode) {
         self.compile_node(&expr.target);
 
-        let prop_name = Object::String(expr.setter.lexeme.clone());
+        let prop_name = Object::String(Rc::new(RefCell::new(expr.setter.lexeme.clone())));
         let prop_lineno = (expr.setter.line_num, expr.setter.column_num);
 
         // TODO: Should objects be frozen by default? Should we statically

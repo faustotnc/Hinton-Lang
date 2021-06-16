@@ -4,7 +4,7 @@ use super::{RuntimeErrorType, RuntimeResult, VirtualMachine};
 use crate::{
     bytecode::OpCode,
     natives::{self, get_next_in_iter, iter_has_next, make_iter},
-    objects::{ClassObject, ClosureObject, Object, RangeObject, UpValRef},
+    objects::{ClassObject, ClosureObject, Object, RangeObject, TupleObject, UpValRef},
 };
 
 impl<'a> VirtualMachine {
@@ -48,7 +48,7 @@ impl<'a> VirtualMachine {
                     // Gets the name from the pool assigns the value to the global
                     if let Object::String(name) = self.read_constant(pos).clone() {
                         let val = self.pop_stack();
-                        self.globals.insert(name, val);
+                        self.globals.insert(name.borrow().clone(), val);
                     } else {
                         unreachable!("Expected a string for global declaration name.");
                     }
@@ -59,7 +59,7 @@ impl<'a> VirtualMachine {
 
                     // Gets the name from the pool
                     if let Object::String(name) = self.read_constant(pos).clone() {
-                        let val = self.globals.get(&name).unwrap().clone();
+                        let val = self.globals.get(&*name.borrow()).unwrap().clone();
                         self.push_stack(val);
                     } else {
                         unreachable!("Expected a string as global declaration name.");
@@ -72,7 +72,7 @@ impl<'a> VirtualMachine {
                     // Gets the name from the pool
                     if let Object::String(name) = self.read_constant(pos).clone() {
                         let val = self.stack.last().unwrap().clone();
-                        self.globals.insert(name, val);
+                        self.globals.insert(name.borrow().clone(), val);
                     } else {
                         unreachable!("Expected a string as global declaration name.");
                     }
@@ -123,7 +123,8 @@ impl<'a> VirtualMachine {
                         arr_values.push(self.pop_stack());
                     }
 
-                    self.push_stack(Object::Array(arr_values));
+                    let arr = Rc::new(RefCell::new(arr_values));
+                    self.push_stack(Object::Array(arr));
                 }
 
                 OpCode::MakeTuple | OpCode::MakeTupleLong => {
@@ -135,7 +136,8 @@ impl<'a> VirtualMachine {
                         tuple_values.push(self.pop_stack());
                     }
 
-                    self.push_stack(Object::Tuple(tuple_values));
+                    let tup = Box::new(TupleObject { tup: tuple_values });
+                    self.push_stack(Object::Tuple(tup));
                 }
 
                 OpCode::Indexing => {
@@ -423,8 +425,10 @@ impl<'a> VirtualMachine {
                         _ => unreachable!("Expected a native function name on TOS."),
                     };
 
-                    match natives::get_native_fn(&name) {
-                        Ok(f) => self.push_stack(Object::Native(f)),
+                    let name = &name.borrow().clone();
+
+                    match natives::get_native_fn(name) {
+                        Ok(f) => self.push_stack(Object::Native(Box::new(f))),
                         Err(e) => return e,
                     }
                 }
@@ -453,9 +457,10 @@ impl<'a> VirtualMachine {
                         _ => unreachable!("Expected a function object for closure."),
                     };
 
-                    let mut up_values: Vec<Rc<RefCell<UpValRef>>> = Vec::with_capacity(function.up_val_count);
+                    let up_val_count = function.borrow().up_val_count;
+                    let mut up_values: Vec<Rc<RefCell<UpValRef>>> = Vec::with_capacity(up_val_count);
 
-                    for _ in 0..(function.up_val_count) {
+                    for _ in 0..up_val_count {
                         let is_local = self.get_next_byte() == 1u8;
                         let index = self.get_next_byte() as usize;
 
@@ -479,9 +484,10 @@ impl<'a> VirtualMachine {
                         _ => unreachable!("Expected a function object for closure."),
                     };
 
-                    let mut up_values: Vec<Rc<RefCell<UpValRef>>> = Vec::with_capacity(function.up_val_count);
+                    let up_val_count = function.borrow().up_val_count;
+                    let mut up_values: Vec<Rc<RefCell<UpValRef>>> = Vec::with_capacity(up_val_count);
 
-                    for _ in 0..(function.up_val_count) {
+                    for _ in 0..up_val_count {
                         let is_local = self.get_next_byte() == 1u8;
                         let index = self.get_next_short() as usize;
 
@@ -554,10 +560,10 @@ impl<'a> VirtualMachine {
 
                     match self.peek_stack_mut(self.stack.len() - 1) {
                         Object::Function(m) => {
-                            m.defaults = defaults;
+                            m.borrow_mut().defaults = defaults;
                         }
                         Object::Closure(m) => {
-                            m.function.defaults = defaults;
+                            m.function.borrow_mut().defaults = defaults;
                         }
                         _ => unreachable!("Expected a function object on TOS."),
                     }
@@ -585,7 +591,9 @@ impl<'a> VirtualMachine {
                         _ => unreachable!("Expected string for class name."),
                     };
 
-                    let new_class = Object::Class(ClassObject { name });
+                    let new_class = Object::Class(ClassObject {
+                        name: name.borrow().clone(),
+                    });
                     self.push_stack(new_class);
                 }
 
@@ -615,15 +623,16 @@ impl<'a> VirtualMachine {
 
                     match self.pop_stack() {
                         Object::Instance(x) => {
-                            if x.fields.contains_key(&prop_name) {
-                                let val = x.fields.get(&prop_name).unwrap().clone();
+                            if x.borrow().fields.contains_key(&*prop_name.borrow()) {
+                                let val = x.borrow().fields.get(&*prop_name.borrow()).unwrap().clone();
                                 self.push_stack(val);
                             } else {
                                 return RuntimeResult::Error {
                                     error: RuntimeErrorType::ReferenceError,
                                     message: format!(
                                         "Property '{}' not defined for object of type '{}'.",
-                                        prop_name, x.class.name
+                                        &*prop_name.borrow(),
+                                        x.borrow().class.name
                                     ),
                                 };
                             }
@@ -646,8 +655,10 @@ impl<'a> VirtualMachine {
                         // TODO: This does not actually modify the instance object assigned to
                         // a variable. It only modifies the cloned instance that is currently
                         // on top of the stack. We need a heap to store class instances.
-                        Object::Instance(mut x) => {
-                            x.fields.insert(prop_name, value.clone());
+                        Object::Instance(x) => {
+                            x.borrow_mut()
+                                .fields
+                                .insert(prop_name.borrow().clone(), value.clone());
                             self.push_stack(value);
                         }
                         _ => todo!("Other objects also have properties."),

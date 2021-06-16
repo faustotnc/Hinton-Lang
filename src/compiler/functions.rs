@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use super::{Compiler, CompilerErrorType, CompilerType, SymbolType, UpValue};
 use crate::{
     ast::*,
@@ -48,7 +50,8 @@ impl Compiler {
                 });
 
                 // Add the function's name to the pool of the function
-                self.add_literal_to_pool(Object::String(decl.name.lexeme.clone()), &decl.name, false);
+                let fn_name = Object::String(Rc::new(RefCell::new(decl.name.lexeme.clone())));
+                self.add_literal_to_pool(fn_name, &decl.name, false);
                 // compiles the parameter declarations so that the compiler
                 // knows about their their lexical scoping (their stack position),
                 // but does not compile the default value for named parameters.
@@ -111,17 +114,19 @@ impl Compiler {
     }
 
     fn emit_function(&mut self, function: FuncObject, up_values: Vec<UpValue>, token: &Token) {
+        let func = Object::Function(Rc::new(RefCell::new(function)));
+
         // If the function does not close over any values, then there is
         // no need to create a closure object at runtime.
         if up_values.len() == 0 {
-            self.add_literal_to_pool(Object::Function(function), token, true);
+            self.add_literal_to_pool(func, token, true);
             return;
         }
 
         let func_pos = (token.line_num, token.column_num);
 
         // Add the function object to the literal pool of the parent function
-        if let Some(idx) = self.add_literal_to_pool(Object::Function(function), token, false) {
+        if let Some(idx) = self.add_literal_to_pool(func, token, false) {
             if idx < 256 {
                 if up_values.len() < 256 {
                     self.emit_op_code_with_byte(OpCode::MakeClosure, idx as u8, func_pos);

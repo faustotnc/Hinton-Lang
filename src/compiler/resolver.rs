@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use super::{
     symbols::{Symbol, SL},
     Compiler, UpValue,
@@ -44,7 +46,8 @@ impl Compiler {
                     &format!("Cannot modify native function '{}'.", token.lexeme),
                 );
             } else {
-                self.add_literal_to_pool(Object::String(token.lexeme.clone()), token, true);
+                let name = Object::String(Rc::new(RefCell::new(token.lexeme.clone())));
+                self.add_literal_to_pool(name, token, true);
                 self.emit_op_code(OpCode::LoadNative, (token.line_num, token.column_num));
             }
 
@@ -168,7 +171,9 @@ impl Compiler {
                     SymbolType::Enum => "Enums",
                     // Only variables & parameters are re-assignable
                     SymbolType::Variable | SymbolType::Parameter => {
-                        match self.add_literal_to_pool(Object::String(token.lexeme.clone()), &token, false) {
+                        let name = Object::String(Rc::new(RefCell::new(token.lexeme.clone())));
+
+                        match self.add_literal_to_pool(name, &token, false) {
                             Some(idx) => return Ok(SL::Global(symbol_info.0, idx as usize)),
                             None => return Ok(SL::None),
                         }
@@ -184,7 +189,8 @@ impl Compiler {
                 return Ok(SL::None);
             }
 
-            return match self.add_literal_to_pool(Object::String(token.lexeme.clone()), &token, false) {
+            let name = Object::String(Rc::new(RefCell::new(token.lexeme.clone())));
+            return match self.add_literal_to_pool(name, &token, false) {
                 Some(idx) => Ok(SL::Global(symbol_info.0, idx as usize)),
                 None => Ok(SL::None),
             };

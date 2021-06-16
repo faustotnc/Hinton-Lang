@@ -228,10 +228,13 @@ pub fn iter_has_next(o: &Rc<RefCell<IterObject>>) -> bool {
     let o = o.borrow_mut();
 
     let len = match o.iter.borrow() {
-        Object::String(ref x) => x.len(),
-        Object::Array(ref x) => x.len(),
-        Object::Tuple(ref x) => x.len(),
+        Object::String(ref x) => x.borrow_mut().len(),
+        Object::Tuple(ref x) => x.tup.len(),
         Object::Range(ref x) => i64::abs(x.max - x.min) as usize,
+        Object::Array(ref x) => {
+            let a = &x.borrow_mut();
+            a.len()
+        }
         _ => unreachable!("Object is not iterable."),
     };
 
@@ -251,7 +254,7 @@ fn native_input(args: Vec<Object>) -> Result<Object, RuntimeResult> {
             match io::stdin().read_line(&mut input) {
                 Ok(_) => {
                     input.pop(); // remove added newline
-                    Ok(Object::String(input))
+                    Ok(Object::String(Rc::new(RefCell::new(input))))
                 }
                 Err(e) => Err(RuntimeResult::Error {
                     error: RuntimeErrorType::Internal,
@@ -278,7 +281,8 @@ fn native_assert(args: Vec<Object>) -> Result<Object, RuntimeResult> {
         let message = if args.len() == 2 {
             args[1].clone()
         } else {
-            Object::String(String::from("Assertion failed on a falsey value."))
+            let str = Rc::new(RefCell::new(String::from("Assertion failed on a falsey value.")));
+            Object::String(str)
         };
 
         Err(RuntimeResult::Error {
@@ -301,7 +305,8 @@ fn native_assert_eq(args: Vec<Object>) -> Result<Object, RuntimeResult> {
         let message = if args.len() == 3 {
             args[2].clone()
         } else {
-            Object::String(String::from("Assertion values are not equal."))
+            let str = Rc::new(RefCell::new(String::from("Assertion values are not equal.")));
+            Object::String(str)
         };
 
         Err(RuntimeResult::Error {
@@ -324,7 +329,8 @@ fn native_assert_ne(args: Vec<Object>) -> Result<Object, RuntimeResult> {
         let message = if args.len() == 3 {
             args[2].clone()
         } else {
-            Object::String(String::from("Assertion values are equal."))
+            let str = Rc::new(RefCell::new(String::from("Assertion values are equal.")));
+            Object::String(str)
         };
 
         Err(RuntimeResult::Error {

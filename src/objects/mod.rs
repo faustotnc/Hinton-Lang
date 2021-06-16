@@ -53,7 +53,7 @@ pub struct NativeFuncObj {
 
 #[derive(Clone)]
 pub struct ClosureObject {
-    pub function: FuncObject,
+    pub function: Rc<RefCell<FuncObject>>,
     pub up_values: Vec<Rc<RefCell<UpValRef>>>,
 }
 
@@ -90,25 +90,33 @@ pub struct InstanceObject {
     pub fields: HashMap<String, Object>,
 }
 
+#[derive(Clone)]
+pub struct TupleObject {
+    pub tup: Vec<Object>,
+}
+
 /// All types of objects in Hinton
 #[derive(Clone)]
 pub enum Object {
-    Array(Vec<Object>),
     Bool(bool),
     Float(f64),
-    Function(FuncObject),
     Int(i64),
-    Iter(Rc<RefCell<IterObject>>),
     Null,
     Range(RangeObject),
-    String(String),
-    Tuple(Vec<Object>),
     Class(ClassObject),
-    Instance(InstanceObject),
+
+    // Heap-allocated
+    // TODO: Test for reference cycles.
+    Array(Rc<RefCell<Vec<Object>>>),
+    Function(Rc<RefCell<FuncObject>>),
+    Instance(Rc<RefCell<InstanceObject>>),
+    Iter(Rc<RefCell<IterObject>>),
+    String(Rc<RefCell<String>>),
+    Tuple(Box<TupleObject>),
 
     // Internal
     Closure(ClosureObject),
-    Native(NativeFuncObj),
+    Native(Box<NativeFuncObj>),
 }
 
 impl Object {
@@ -125,7 +133,12 @@ impl Object {
             &Self::String(_) => "String",
             &Self::Tuple(_) => "Tuple",
             Self::Class(c) => c.name.as_str(),
-            Self::Instance(i) => i.class.name.as_str(),
+            Self::Instance(_i) => {
+                // let s = i.borrow().class.name.to_owned();
+
+                // s.as_str()
+                "k"
+            }
         };
     }
 
@@ -188,11 +201,9 @@ impl Object {
         }
     }
 
-    pub fn as_string(&self) -> Option<String> {
+    pub fn as_string(&self) -> Option<&Rc<RefCell<String>>> {
         match self {
-            Object::String(s) => Some(String::from(s)),
-            Object::Int(n) => Some(n.to_string()),
-            Object::Float(n) => Some(n.to_string()),
+            Object::String(s) => Some(s),
             _ => None,
         }
     }
@@ -211,21 +222,21 @@ impl Object {
         }
     }
 
-    pub fn as_array(&self) -> Option<&Vec<Object>> {
+    pub fn as_array(&self) -> Option<&Rc<RefCell<Vec<Object>>>> {
         match self {
             Object::Array(v) => Some(v),
             _ => None,
         }
     }
 
-    pub fn as_tuple(&self) -> Option<&Vec<Object>> {
+    pub fn as_tuple(&self) -> Option<&Box<TupleObject>> {
         match self {
             Object::Tuple(v) => Some(v),
             _ => None,
         }
     }
 
-    pub fn as_function(&self) -> Option<&FuncObject> {
+    pub fn as_function(&self) -> Option<&Rc<RefCell<FuncObject>>> {
         match self {
             Object::Function(v) => Some(v),
             _ => None,
@@ -272,9 +283,11 @@ impl Object {
         // At this point, the operands have the same type, so we
         // proceed to check if they match in value.
         return match self {
-            Object::String(a) => (*a == right.as_string().unwrap()),
+            Object::String(a) => (*a.borrow() == *right.as_string().unwrap().borrow()),
             Object::Array(a) => {
-                let b = right.as_array().unwrap();
+                let a = &a.borrow();
+                let b = &right.as_array().unwrap().borrow();
+
                 // If the arrays differ in size, they must differ in value. However, if they
                 // are equal in size, then we must check that each item match.
                 if a.len() != b.len() {
@@ -292,7 +305,9 @@ impl Object {
                 }
             }
             Object::Tuple(a) => {
-                let b = right.as_tuple().unwrap();
+                let a = &a.tup;
+                let b = &right.as_tuple().unwrap().tup;
+
                 // If the tuples differ in size, they must differ in value. However, if they
                 // are equal in size, then we must check that each item match.
                 if a.len() != b.len() {
@@ -344,7 +359,7 @@ impl<'a> fmt::Display for Object {
                     + String::from("\x1b[0m").as_str();
                 fmt::Display::fmt(&str, f)
             }
-            Object::String(ref inner) => fmt::Display::fmt(&inner, f),
+            Object::String(ref inner) => fmt::Display::fmt(&*inner.borrow().as_str(), f),
             Object::Bool(inner) => {
                 let str = if inner {
                     String::from("\x1b[38;5;3mtrue\x1b[0m")
@@ -355,9 +370,11 @@ impl<'a> fmt::Display for Object {
                 fmt::Display::fmt(&str, f)
             }
             Object::Array(ref inner) => {
+                let arr = &inner.borrow();
+
                 let mut arr_str = String::from("[");
-                for (idx, obj) in inner.iter().enumerate() {
-                    if idx == inner.len() - 1 {
+                for (idx, obj) in arr.iter().enumerate() {
+                    if idx == arr.len() - 1 {
                         arr_str += &(format!("{}", obj))[..]
                     } else {
                         arr_str += &(format!("{}, ", obj))[..];
@@ -368,9 +385,11 @@ impl<'a> fmt::Display for Object {
                 write!(f, "{}", arr_str)
             }
             Object::Tuple(ref inner) => {
+                let arr = &inner.tup;
+
                 let mut arr_str = String::from("(");
-                for (idx, obj) in inner.iter().enumerate() {
-                    if idx == inner.len() - 1 {
+                for (idx, obj) in arr.iter().enumerate() {
+                    if idx == arr.len() - 1 {
                         arr_str += &(format!("{}", obj))[..]
                     } else {
                         arr_str += &(format!("{}, ", obj))[..];
@@ -392,26 +411,30 @@ impl<'a> fmt::Display for Object {
                 fmt::Display::fmt(&str, f)
             }
             Object::Function(ref inner) => {
-                let str = if inner.name == "" {
+                let name = &inner.borrow_mut().name;
+
+                let str = if name == "" {
                     String::from("<script>")
                 } else {
-                    format!("<Func '{}'>", inner.name)
+                    format!("<Func '{}'>", name)
                 };
 
                 fmt::Display::fmt(&str, f)
             }
             Object::Closure(ref inner) => {
-                let str = if inner.function.name == "" {
+                let name = &inner.function.borrow_mut().name;
+
+                let str = if name == "" {
                     String::from("<Func script>")
                 } else {
-                    format!("<Func '{}'>", inner.function.name)
+                    format!("<Func '{}'>", name)
                 };
 
                 fmt::Display::fmt(&str, f)
             }
             Object::Class(ref inner) => fmt::Display::fmt(&format!("<Class '{}'>", inner.name), f),
             Object::Instance(ref inner) => {
-                fmt::Display::fmt(&format!("<Instance of '{}'>", inner.class.name), f)
+                fmt::Display::fmt(&format!("<Instance of '{}'>", inner.borrow().class.name), f)
             }
             Object::Native(ref inner) => {
                 let str = format!("<NativeFn '{}'>", inner.name);
