@@ -44,7 +44,7 @@ NOTE: You must install Rust to run Hinton. I know, I know, but Hinton isn't a fu
 
 ## Advanced Programs
 ### The Classic Fibonacci Number Calculator:
-On average, running with release mode, the algorithm takes ~455ms to compute the `fib(25)` on my MacBook Pro 2019 with 16GB of RAM running MacOS Big Sur. For comparison, a similar program in Python takes ~24ms. Not very fast 😕.
+On average, running with release mode, the algorithm takes ~105ms to compute the `fib(25)` on my MacBook Pro 2019 with 16GB of RAM running MacOS Big Sur. For comparison, a similar program in Python takes ~24ms. Not very fast, but not super slow either.
 ```swift
 func fib(n := 0) {
     if (n < 2) return n;
@@ -107,27 +107,25 @@ while x <= 10 {
 **Bytecode**
 ```
 ==== <File '/path/to/file.ht'> ====
-00001   00000 0x11 – LOAD_IMM_0I                
-  |     00001 0x2F – DEFINE_GLOBAL              0 -> 'x'
-00003   00003 0x30 – GET_GLOBAL                 0 -> 'x'
-  |     00005 0x29 – LOAD_IMM_N                 10
-  |     00007 0x0F – LESS_THAN_EQ               
-  |     00008 0x3F – POP_JUMP_IF_FALSE          33 (add 22 to IP)
-00004   00011 0x28 – LOAD_CONSTANT              1 -> (print)
-  |     00013 0x17 – LOAD_NATIVE                
-  |     00014 0x28 – LOAD_CONSTANT              2 -> (X equals )
-  |     00016 0x30 – GET_GLOBAL                 0 -> 'x'
-  |     00018 0x00 – ADD                        
-  |     00019 0x25 – FUNC_CALL                  1
-00003   00021 0x20 – POP_STACK_TOP              
-00005   00022 0x30 – GET_GLOBAL                 0 -> 'x'
-  |     00024 0x13 – LOAD_IMM_1I                
-  |     00025 0x00 – ADD                        
-  |     00026 0x31 – SET_GLOBAL                 0 -> 'x'
-00004   00028 0x20 – POP_STACK_TOP              
-00006   00029 0x2D – POP_STACK_N                0
-00003   00031 0x2A – LOOP_JUMP                  3 (sub 30 from IP)
-00000   00033 0x22 – END_VIRTUAL_MACHINE
+00001   00000 0x12 – LOAD_IMM_0I                
+  |     00001 0x26 – DEFINE_GLOBAL              0 -> 'x'
+00003   00003 0x28 – GET_GLOBAL                 0 -> 'x'
+  |     00005 0x2E – LOAD_IMM_N                 10
+  |     00007 0x10 – LESS_THAN_EQ               
+  |     00008 0x49 – POP_JUMP_IF_FALSE          30 (add 19 to IP)
+00004   00011 0x2F – LOAD_NATIVE                7 -> 'print'
+  |     00013 0x2D – LOAD_CONSTANT              1 -> (X equals )
+  |     00015 0x28 – GET_GLOBAL                 0 -> 'x'
+  |     00017 0x00 – ADD                        
+  |     00018 0x27 – FUNC_CALL                  1
+00003   00020 0x21 – POP_STACK_TOP              
+00005   00021 0x28 – GET_GLOBAL                 0 -> 'x'
+  |     00023 0x14 – LOAD_IMM_1I                
+  |     00024 0x00 – ADD                        
+  |     00025 0x35 – SET_GLOBAL                 0 -> 'x'
+00004   00027 0x21 – POP_STACK_TOP              
+00003   00028 0x30 – LOOP_JUMP                  3 (sub 27 from IP)
+00000   00030 0x08 – END_VIRTUAL_MACHINE
 ```
 
 And to see the raw bytes, run the file with the `show_raw_bytecode` flag:
@@ -137,13 +135,12 @@ cargo run --features show_raw_bytecode </path/to/program.ht>
 Which, for the above program, results in the following chunk of bytes:
 ```
 ==== <File '/path/to/file.ht'> ====
-0x11 0x2F 0x00 0x30 0x00 0x29 0x0A 0x0F 
-0x3F 0x00 0x16 0x28 0x01 0x17 0x28 0x02 
-0x30 0x00 0x00 0x25 0x01 0x20 0x30 0x00 
-0x13 0x00 0x31 0x00 0x20 0x2D 0x00 0x2A 
-0x1E 0x22 
+0x12 0x26 0x00 0x28 0x00 0x2E 0x0A 0x10 
+0x49 0x00 0x13 0x2F 0x07 0x2D 0x01 0x28 
+0x00 0x00 0x27 0x01 0x21 0x28 0x00 0x14 
+0x00 0x35 0x00 0x21 0x30 0x1B 0x08 
 
-Chunk Size: 34
+Chunk Size: 31
 ================
 ```
 

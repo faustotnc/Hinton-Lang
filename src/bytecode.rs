@@ -37,7 +37,6 @@ pub enum OpCode {
     LoadImmFalse,
     LoadImmNull,
     LoadImmTrue,
-    LoadNative,
     LogicNot,
     MakeIter,
     MakeRange,
@@ -62,13 +61,14 @@ pub enum OpCode {
     GetLocal,
     GetProp,
     GetUpVal,
-    MakeInstance,
     JumpHasNextOrPop,
     LoadConstant,
     LoadImmN,
+    LoadNative,
     LoopJump,
     MakeArray,
     MakeClass,
+    MakeInstance,
     MakeTuple,
     SetGlobal,
     SetLocal,
@@ -315,7 +315,7 @@ pub fn print_raw(chunk: &Chunk, name: &str) {
 /// ## Arguments
 /// * `name` – the name to print for the current chunk
 #[cfg(feature = "show_bytecode")]
-pub fn disassemble_function_scope(chunk: &Chunk, name: &String) {
+pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &String) {
     // prints this chunk's name
     println!("==== {} ====", name);
 
@@ -390,7 +390,6 @@ pub fn disassemble_function_scope(chunk: &Chunk, name: &String) {
             OpCode::LoadImmFalse => op_code_name = "LOAD_IMM_FALSE",
             OpCode::LoadImmNull => op_code_name = "LOAD_IMM_NULL",
             OpCode::LoadImmTrue => op_code_name = "LOAD_IMM_TRUE",
-            OpCode::LoadNative => op_code_name = "LOAD_NATIVE",
             OpCode::LogicNot => op_code_name = "LOGIC_NOT",
             OpCode::MakeIter => op_code_name = "MAKE_ITER",
             OpCode::MakeRange => op_code_name = "MAKE_RANGE",
@@ -499,6 +498,11 @@ pub fn disassemble_function_scope(chunk: &Chunk, name: &String) {
             OpCode::CloseUpVal => {
                 op_code_name = "CLOSE_UP_VAL";
                 get_operand(1);
+            }
+            OpCode::LoadNative => {
+                op_code_name = "LOAD_NATIVE";
+                get_operand(1);
+                operand_val += &format!(" -> '{}'", natives[chunk.get_byte(idx) as usize]);
             }
 
             // OpCode with 2 operands
@@ -613,14 +617,14 @@ pub fn disassemble_function_scope(chunk: &Chunk, name: &String) {
                     get_operand(1);
 
                     let obj = const_val(idx, false);
-                    up_value_count = obj.as_function().unwrap().up_val_count;
+                    up_value_count = obj.as_function().unwrap().borrow().up_val_count;
                     operand_val += &format!(" -> '{}'", obj);
                 } else {
                     op_code_name = "MAKE_CLOSURE_LONG";
                     get_operand(2);
 
                     let obj = const_val(idx, true);
-                    up_value_count = obj.as_function().unwrap().up_val_count;
+                    up_value_count = obj.as_function().unwrap().borrow().up_val_count;
                     operand_val += &format!(" -> '{}'", obj);
                 }
 
@@ -647,14 +651,14 @@ pub fn disassemble_function_scope(chunk: &Chunk, name: &String) {
                     get_operand(1);
 
                     let obj = const_val(idx, false);
-                    up_value_count = obj.as_function().unwrap().up_val_count;
+                    up_value_count = obj.as_function().unwrap().borrow().up_val_count;
                     operand_val += &format!(" -> '{}'", obj);
                 } else {
                     op_code_name = "MAKE_CLOSURE_LONG_LARGE";
                     get_operand(2);
 
                     let obj = const_val(idx, true);
-                    up_value_count = obj.as_function().unwrap().up_val_count;
+                    up_value_count = obj.as_function().unwrap().borrow().up_val_count;
                     operand_val += &format!(" -> '{}'", obj);
                 }
 

@@ -3,129 +3,107 @@ use crate::{
     objects::{IterObject, NativeFuncObj, Object},
     virtual_machine::RuntimeResult,
 };
-use std::{borrow::Borrow, cell::RefCell, io, rc::Rc, time::SystemTime};
+use std::{borrow::Borrow, cell::RefCell, collections::HashMap, io, rc::Rc, time::SystemTime};
 
 /// Represents the body of a Hinton native function object.
 pub type NativeFn = fn(Vec<Object>) -> Result<Object, RuntimeResult>;
 
-/// Gets a native function by name.
-///
-/// ## Arguments
-/// * `name` – The name of the native function.
-///
-/// ## Returns
-/// Returns a native function if the provided name matches a native function's name,
-/// otherwise returns a RuntimeResult error.
-pub fn get_native_fn(name: &str) -> Result<NativeFuncObj, RuntimeResult> {
-    match name {
-        "print" => Ok(NativeFuncObj {
-            name: String::from("print"),
-            min_arity: 1,
-            max_arity: 1,
-            function: native_print as NativeFn,
-        }),
-        "input" => Ok(NativeFuncObj {
-            name: String::from("input"),
-            min_arity: 1,
-            max_arity: 1,
-            function: native_input as NativeFn,
-        }),
-        "iter" => Ok(NativeFuncObj {
-            name: String::from("iter"),
-            min_arity: 1,
-            max_arity: 1,
-            function: native_iter as NativeFn,
-        }),
-        "next" => Ok(NativeFuncObj {
-            name: String::from("next"),
-            min_arity: 1,
-            max_arity: 1,
-            function: native_next as NativeFn,
-        }),
-        "clock" => Ok(NativeFuncObj {
-            name: String::from("clock"),
-            min_arity: 0,
-            max_arity: 0,
-            function: native_clock as NativeFn,
-        }),
-        "assert" => Ok(NativeFuncObj {
-            name: String::from("assert"),
-            min_arity: 1,
-            max_arity: 2,
-            function: native_assert as NativeFn,
-        }),
-        "assert_eq" => Ok(NativeFuncObj {
-            name: String::from("assert_eq"),
-            min_arity: 2,
-            max_arity: 3,
-            function: native_assert_eq as NativeFn,
-        }),
-        "assert_ne" => Ok(NativeFuncObj {
-            name: String::from("assert_ne"),
-            min_arity: 2,
-            max_arity: 3,
-            function: native_assert_ne as NativeFn,
-        }),
-        _ => Err(RuntimeResult::Error {
-            error: RuntimeErrorType::ReferenceError,
-            message: format!("No native function named '{}'.", name),
-        }),
-    }
+/// Represents the list of native functions available through a Hinton program.
+pub struct Natives {
+    pub nat: HashMap<String, NativeFuncObj>,
+    pub names: Vec<String>,
 }
 
-/// Finds and executes a native function by name.
-///
-/// ## Arguments
-/// * `name` – The name of the native function.
-/// * `args` – A vector of objects (the arguments) for the native function.
-///
-/// ## Returns
-/// Returns the result of the call if the function was executed successfully, otherwise
-/// returns a RuntimeResult error.
-pub fn call_native(name: &str, args: Vec<Object>) -> Result<Object, RuntimeResult> {
-    match get_native_fn(name) {
-        Ok(f) => {
-            let args_len = args.len() as u8;
+impl Natives {
+    // Adds a native function definition to the native functions list.
+    pub fn add_native_function(&mut self, name: &str, min_arity: u8, max_arity: u8, body: NativeFn) {
+        let name = String::from(name);
 
-            // Checks the argument arity for the function call.
-            if args_len < f.min_arity || args_len > f.max_arity {
-                if f.min_arity == f.max_arity {
-                    return Err(RuntimeResult::Error {
-                        error: RuntimeErrorType::ArgumentError,
-                        message: format!("Expected {} arguments but got {} instead.", f.min_arity, args_len),
-                    });
-                } else {
-                    return Err(RuntimeResult::Error {
-                        error: RuntimeErrorType::ArgumentError,
-                        message: format!(
-                            "Expected {} to {} arguments but got {} instead.",
-                            f.min_arity, f.max_arity, args_len
-                        ),
-                    });
+        let f = NativeFuncObj {
+            name: name.clone(),
+            min_arity,
+            max_arity,
+            function: body,
+        };
+
+        self.nat.insert(name.clone(), f);
+        self.names.push(name);
+    }
+
+    /// Finds and executes a native function by name.
+    pub fn call_native(&mut self, name: &str, args: Vec<Object>) -> Result<Object, RuntimeResult> {
+        match self.nat.get(name) {
+            Some(f) => {
+                let args_len = args.len() as u8;
+
+                // Checks the argument arity for the function call.
+                if args_len < f.min_arity || args_len > f.max_arity {
+                    if f.min_arity == f.max_arity {
+                        return Err(RuntimeResult::Error {
+                            error: RuntimeErrorType::ArgumentError,
+                            message: format!(
+                                "Expected {} arguments but got {} instead.",
+                                f.min_arity, args_len
+                            ),
+                        });
+                    } else {
+                        return Err(RuntimeResult::Error {
+                            error: RuntimeErrorType::ArgumentError,
+                            message: format!(
+                                "Expected {} to {} arguments but got {} instead.",
+                                f.min_arity, f.max_arity, args_len
+                            ),
+                        });
+                    }
                 }
+
+                // Calls the native function
+                let call_result = (f.function)(args);
+
+                // Returns the result of the call
+                return call_result;
             }
-
-            // Calls the native function
-            let call_result = (f.function)(args);
-
-            // Returns the result of the call
-            return call_result;
+            None => Err(RuntimeResult::Error {
+                error: RuntimeErrorType::ReferenceError,
+                message: format!("No native function named '{}'.", name),
+            }),
         }
-        Err(e) => Err(e),
+    }
+
+    /// Obtains the NativeFunctionObj associated with a native function name.
+    pub fn get_native_fn_object(&self, idx: usize) -> Result<NativeFuncObj, RuntimeResult> {
+        let name = &self.names[idx];
+
+        match self.nat.get(name) {
+            Some(f) => Ok(f.to_owned()),
+            None => Err(RuntimeResult::Error {
+                error: RuntimeErrorType::ReferenceError,
+                message: format!("No native function named '{}'.", name),
+            }),
+        }
     }
 }
 
-/// Checks whether or not a string name is associated with a native function.
-///
-/// ## Arguments
-/// * `name` – The name of the native function.
-///
-/// ## Returns
-/// True if the name maps to a native function. False otherwise.
-pub fn check_is_native(name: &str) -> bool {
-    match get_native_fn(name) {
-        Ok(_) => true,
-        Err(_) => false,
+/// The default implementation of a native function list.
+impl Default for Natives {
+    fn default() -> Self {
+        let mut natives = Natives {
+            nat: Default::default(),
+            names: Default::default(),
+        };
+
+        // >>>>>>>>>>>>>>>> Native functions to be added after this line
+        natives.add_native_function("assert", 1, 2, native_assert as NativeFn);
+        natives.add_native_function("assert_eq", 2, 3, native_assert_eq as NativeFn);
+        natives.add_native_function("assert_ne", 2, 3, native_assert_ne as NativeFn);
+        natives.add_native_function("clock", 0, 0, native_clock as NativeFn);
+        natives.add_native_function("input", 1, 1, native_input as NativeFn);
+        natives.add_native_function("iter", 1, 1, native_iter as NativeFn);
+        natives.add_native_function("next", 1, 1, native_next as NativeFn);
+        natives.add_native_function("print", 1, 1, native_print as NativeFn);
+        // <<<<<<<<<<<<<<<< Native functions to be added before this line
+
+        return natives;
     }
 }
 

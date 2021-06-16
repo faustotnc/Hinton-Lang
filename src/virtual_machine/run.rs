@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use super::{RuntimeErrorType, RuntimeResult, VirtualMachine};
 use crate::{
     bytecode::OpCode,
-    natives::{self, get_next_in_iter, iter_has_next, make_iter},
+    natives::{get_next_in_iter, iter_has_next, make_iter},
     objects::{ClassObject, ClosureObject, Object, RangeObject, TupleObject, UpValRef},
 };
 
@@ -420,12 +420,9 @@ impl<'a> VirtualMachine {
                 }
 
                 OpCode::LoadNative => {
-                    let name = match self.pop_stack() {
-                        Object::String(x) => x,
-                        _ => unreachable!("Expected a native function name on TOS."),
-                    };
+                    let native = self.get_next_byte() as usize;
 
-                    match natives::get_native_fn(&name) {
+                    match self.natives.get_native_fn_object(native) {
                         Ok(f) => self.push_stack(Object::Native(Box::new(f))),
                         Err(e) => return e,
                     }

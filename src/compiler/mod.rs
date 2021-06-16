@@ -82,6 +82,7 @@ pub struct Compiler {
     compiler_type: CompilerType,
     functions: Vec<FunctionScope>,
     globals: SymbolTable,
+    natives: Vec<String>,
     errors: Vec<ErrorReport>,
 }
 
@@ -97,7 +98,11 @@ impl Compiler {
     /// ## Returns
     /// `Result<chunk, InterpretResult>` – If the program had no compile-time errors, returns
     /// the main chunk for this module. Otherwise returns an InterpretResult::INTERPRET_COMPILE_ERROR.
-    pub fn compile_file(filepath: &str, program: &ASTNode) -> Result<FuncObject, Vec<ErrorReport>> {
+    pub fn compile_file(
+        filepath: &str,
+        program: &ASTNode,
+        natives: Vec<String>,
+    ) -> Result<FuncObject, Vec<ErrorReport>> {
         // The first element in a symbol table is always the symbol representing
         // the function to which the symbol table belongs.
         let symbols = SymbolTable::new(vec![Symbol {
@@ -131,6 +136,7 @@ impl Compiler {
             functions: vec![base_fn],
             errors: vec![],
             globals: SymbolTable::new(vec![]),
+            natives,
         };
 
         // Compile the function body
@@ -224,6 +230,7 @@ impl Compiler {
     fn print_pretty_bytecode(&self) {
         bytecode::disassemble_function_scope(
             &self.current_function_scope().function.chunk,
+            &self.natives,
             &self.current_function_scope().function.name,
         );
     }

@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     bytecode::OpCode, compiler::symbols::SymbolType, errors::CompilerErrorType, lexer::tokens::Token,
-    natives, objects::Object,
+    objects::Object,
 };
 
 impl Compiler {
@@ -36,7 +36,7 @@ impl Compiler {
         }
 
         // Look for the identifier in the natives
-        if natives::check_is_native(&token.lexeme) {
+        if let Some(index) = self.natives.iter().position(|n| n == &token.lexeme) {
             if reassign {
                 self.error_at_token(
                     token,
@@ -44,8 +44,11 @@ impl Compiler {
                     &format!("Cannot modify native function '{}'.", token.lexeme),
                 );
             } else {
-                self.add_literal_to_pool(Object::String(token.lexeme.clone()), token, true);
-                self.emit_op_code(OpCode::LoadNative, (token.line_num, token.column_num));
+                self.emit_op_code_with_byte(
+                    OpCode::LoadNative,
+                    index as u8,
+                    (token.line_num, token.column_num),
+                );
             }
 
             return SL::Native;
