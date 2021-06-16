@@ -92,14 +92,17 @@ impl SymbolTable {
         None
     }
 
-    pub fn resolve(&mut self, name: &String, mark_used: bool, captured: bool) -> Option<(Symbol, usize)> {
+    pub fn resolve(&mut self, name: &String, used: bool, captured: Option<bool>) -> Option<(Symbol, usize)> {
         for (idx, symbol) in self.symbols.iter_mut().enumerate().rev() {
             if &symbol.name == name {
-                if mark_used {
+                if used {
                     symbol.is_used = true;
                 }
 
-                symbol.is_captured = captured;
+                if let Some(c) = captured {
+                    symbol.is_captured = c;
+                }
+
                 return Some((symbol.clone(), idx));
             }
         }

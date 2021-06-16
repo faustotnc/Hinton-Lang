@@ -215,7 +215,7 @@ pub struct ForStmtNode {
     pub token: Token,
     pub id: IdentifierExprNode,
     pub iterator: Box<ASTNode>,
-    pub body: Box<ASTNode>,
+    pub body: Vec<ASTNode>,
 }
 
 #[derive(Clone)]

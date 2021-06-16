@@ -18,7 +18,7 @@ impl Compiler {
     /// * `SymbolLoc` – The location (if found) and resolution type of the symbol.
     pub(super) fn resolve_symbol(&mut self, token: &Token, reassign: bool) -> SL {
         // Look for the symbol in the local scope of the current function
-        if let Ok(s) = self.resolve_local(token, reassign, self.functions.len() - 1, false) {
+        if let Ok(s) = self.resolve_local(token, reassign, self.functions.len() - 1, None) {
             return s;
         }
 
@@ -77,11 +77,11 @@ impl Compiler {
         token: &Token,
         for_reassign: bool,
         func_idx: usize,
-        captured: bool,
+        is_captured: Option<bool>,
     ) -> Result<SL, ()> {
         let func = &mut self.functions[func_idx];
 
-        if let Some(resolution) = func.s_table.resolve(&token.lexeme, true, captured) {
+        if let Some(resolution) = func.s_table.resolve(&token.lexeme, true, is_captured) {
             if !resolution.0.is_initialized {
                 let sym_type = match resolution.0.symbol_type {
                     SymbolType::Variable => "variable",
@@ -140,7 +140,7 @@ impl Compiler {
     /// ## Returns
     /// * `Result<SymbolLoc, ()>` – The location (if found) and resolution type of the symbol.
     fn resolve_global(&mut self, token: &Token, reassign: bool) -> Result<SL, ()> {
-        if let Some(symbol_info) = self.globals.resolve(&token.lexeme, true, false) {
+        if let Some(symbol_info) = self.globals.resolve(&token.lexeme, true, None) {
             if !symbol_info.0.is_initialized {
                 let sym_type = match symbol_info.0.symbol_type {
                     SymbolType::Variable => "variable",
@@ -220,7 +220,7 @@ impl Compiler {
         // for the `self.functions.len() - 2` function scope. That is, the local scope of the parent
         // function of the parent function. Look at the call to `self.resolve_up_value(...)` in
         // `self.resolve_symbol(...)` to understand this better.
-        if let Ok(s) = self.resolve_local(token, reassign, func_idx, true) {
+        if let Ok(s) = self.resolve_local(token, reassign, func_idx, Some(true)) {
             return match s {
                 SL::Local(s, p) => self.add_up_value(token, func_idx + 1, s, p, true),
                 _ => unreachable!("SymbolLoc should have been a local symbol."),

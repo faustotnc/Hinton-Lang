@@ -285,7 +285,7 @@ impl Parser {
     /// Returns
     /// * `Option<ASTNode>` – A for statement AST node.
     fn parse_for_statement(&mut self) -> Option<ASTNode> {
-        let tok = self.previous.clone();
+        let token = self.previous.clone();
 
         let mut has_parenthesis = false;
         if self.matches(&L_PAREN) {
@@ -310,33 +310,39 @@ impl Parser {
 
         self.consume(&IN_KW, "Expected 'in' after identifier.");
 
-        let iter = match self.parse_expression() {
-            Some(expr) => expr,
+        let iterator = match self.parse_expression() {
+            Some(expr) => Box::new(expr),
             None => return None, // Could not parse an iterator expression
         };
 
-        let body;
+        let body: Vec<ASTNode>;
         if has_parenthesis {
             self.consume(&R_PARENTHESIS, "Expected ')' after 'for' iterator.");
 
             body = match self.parse_statement() {
-                Some(val) => val,
+                Some(val) => match val {
+                    ASTNode::BlockStmt(block) => block.body,
+                    _ => vec![val],
+                },
                 None => return None, // Could not create then branch
             };
         } else {
             self.consume(&L_CURLY, "Expected '{' after 'for' iterator.");
 
             body = match self.parse_block() {
-                Some(val) => val,
+                Some(val) => match val {
+                    ASTNode::BlockStmt(block) => block.body,
+                    _ => unreachable!("Should have parsed a block."),
+                },
                 None => return None, // Could not create then branch
             };
         }
 
         return Some(ForStmt(ForStmtNode {
-            token: tok,
+            token,
             id,
-            iterator: Box::new(iter),
-            body: Box::new(body),
+            iterator,
+            body,
         }));
     }
 

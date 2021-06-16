@@ -61,23 +61,12 @@ impl Compiler {
         self.compile_node(&stmt.iterator);
         self.emit_op_code(OpCode::MakeIter, loop_line_info);
 
-        // Increment the scope so that the loop's identifier and iterator
-        // placeholder have their own scope.
-        self.current_func_scope_mut().scope_depth += 1;
-
         // Begin the loop
         let loop_start = self.current_chunk().len();
         let exit_jump = self.emit_jump(OpCode::ForIterNextOrJump, &stmt.token);
 
-        // Starts this loop's break scope
-        let depth = self.relative_scope_depth() + 1;
-        self.current_func_scope_mut().loops.push(LoopScope {
-            position: loop_start,
-            loop_type: LoopType::ForIn,
-            // +1 because we don't start the actual scope until the loop
-            // body is being compiled, which occurs later in this function.
-            scope_depth: depth,
-        });
+        // Increment the scope for the loop's iterator
+        self.current_func_scope_mut().scope_depth += 1;
 
         // Emits a placeholder symbol for the loop's iterator, which lives on
         // the stack until the end of the loop. The programmer will never be
@@ -98,6 +87,20 @@ impl Compiler {
             Err(_) => return,
         }
 
+        // Increment the scope for the loop's body.
+        // This scope is removed by the call to `self.end_scope(...)` method below.
+        self.current_func_scope_mut().scope_depth += 1;
+
+        // Starts this loop's break scope
+        let depth = self.relative_scope_depth();
+        self.current_func_scope_mut().loops.push(LoopScope {
+            position: loop_start,
+            loop_type: LoopType::ForIn,
+            // +1 because we don't start the actual scope until the loop
+            // body is being compiled, which occurs later in this function.
+            scope_depth: depth,
+        });
+
         // Declares the loop's identifier.
         match self.declare_symbol(&stmt.id.token, SymbolType::Variable) {
             Ok(symbol_pos) => self.current_func_scope_mut().s_table.mark_initialized(symbol_pos),
@@ -105,25 +108,14 @@ impl Compiler {
         }
 
         // Compiles the loop's body
-        self.compile_node(&stmt.body);
-
-        // Either pops the loop variable off the stack or lifts it
-        // as a closed UpValRef if it is captured by a function
-        // declared inside the loop.
-        if self
-            .current_function_scope()
-            .s_table
-            .symbols
-            .last()
-            .unwrap()
-            .is_captured
-        {
-            self.emit_op_code(OpCode::PopCloseUpVal, loop_line_info);
-        } else {
-            self.emit_op_code(OpCode::PopStackTop, loop_line_info);
+        for node in stmt.body.iter() {
+            self.compile_node(node);
         }
 
-        // Jump back to the start of the loop (including the re-execution of the condition)
+        // Ends the scope for the loop's body.
+        self.end_scope(false, &stmt.token);
+
+        // Jump back to the start of the loop
         self.emit_loop(loop_start, &stmt.token);
         self.patch_jump(exit_jump, &stmt.token);
 
@@ -133,8 +125,7 @@ impl Compiler {
         // Ends this loop's break scope
         self.current_func_scope_mut().loops.pop();
 
-        // Remove the loop's variables and end the scope
-        self.current_func_scope_mut().s_table.pop();
+        // Removes the loop's iterator and ends the iterator scope.
         self.current_func_scope_mut().s_table.pop();
         self.current_func_scope_mut().scope_depth -= 1;
     }
@@ -144,7 +135,7 @@ impl Compiler {
         // Looks for any break statements associated with this loop
         let mut breaks: Vec<usize> = vec![];
         for b in self
-            .current_func_scope_mut()
+            .current_function_scope()
             .breaks
             .iter()
             .filter(|br| br.parent_loop.position == loop_start)
@@ -184,8 +175,6 @@ impl Compiler {
         // and the iterator off the stack before exiting the loop.
         if let super::LoopType::ForIn = current_loop.loop_type {
             if stmt.is_break {
-                popped_scope.append(&mut vec![false, false]);
-            } else {
                 popped_scope.append(&mut vec![false]);
             }
         }

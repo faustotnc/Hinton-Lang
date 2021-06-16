@@ -169,7 +169,7 @@ impl Compiler {
         }
 
         for node in block.body.iter() {
-            self.compile_node(&node.clone());
+            self.compile_node(node);
         }
 
         self.end_scope(block.is_func_body, &block.end_of_block);
@@ -181,7 +181,7 @@ impl Compiler {
     }
 
     /// Ends a scope.
-    fn end_scope(&mut self, is_func_body: bool, token: &Token) {
+    pub(super) fn end_scope(&mut self, is_func_body: bool, token: &Token) {
         let scope = self.relative_scope_depth();
 
         let popped_scope = self
