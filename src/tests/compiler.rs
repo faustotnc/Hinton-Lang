@@ -176,7 +176,7 @@ fn functions_have_access_to_global_vars() {
         Err(_) => panic!("Parser Had Errors."),
     };
 
-    if let Err(_) = Compiler::compile_file("test", &program, vec![]) {
+    if let Err(_) = Compiler::compile_file("test", &program, vec![String::from("print")]) {
         panic!("Functions should have access to global declarations.")
     }
 }
