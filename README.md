@@ -22,7 +22,7 @@ Though this interpreter is based on the Crafting Interpreters book, it implement
 
 * Hinton has support for more operators like `%`, `**`, `<<`, `>>`, `^`, `&`, `~`, nullish coalescing (`??`), ternary conditionals (`? :`), advanced reassignment (`+=`, `**=`, `%=`, etc...), plus binary, hexadecimal, and octal numbers.
 
-* Hinton supports the `break` statement in loops. The `continue` statement is coming soon.
+* Hinton supports the `break` and `continue` statements in loops.
 
 * Hinton supports the "long" version of almost all instructions that have an argument. For example, while the `DEFINE_GLOBAL` instruction takes the next byte as its operand (only allowing 255 global variables to be declared), the `DEFINE_GLOBAL_LONG` instruction takes the next two bytes as its operand (allowing up to 65,536 global variables to be declared).
 
@@ -107,24 +107,24 @@ while x <= 10 {
 **Bytecode**
 ```
 ==== <File '/path/to/file.ht'> ====
-00001   00000 0x12 – LOAD_IMM_0I                
-  |     00001 0x26 – DEFINE_GLOBAL              0 -> 'x'
-00003   00003 0x28 – GET_GLOBAL                 0 -> 'x'
-  |     00005 0x2E – LOAD_IMM_N                 10
-  |     00007 0x10 – LESS_THAN_EQ               
-  |     00008 0x49 – POP_JUMP_IF_FALSE          30 (add 19 to IP)
-00004   00011 0x2F – LOAD_NATIVE                7 -> 'print'
-  |     00013 0x2D – LOAD_CONSTANT              1 -> (X equals )
-  |     00015 0x28 – GET_GLOBAL                 0 -> 'x'
+00001   00000 0x11 – LOAD_IMM_0I                
+  |     00001 0x25 – DEFINE_GLOBAL              0 -> 'x'
+00003   00003 0x27 – GET_GLOBAL                 0 -> 'x'
+  |     00005 0x2C – LOAD_IMM_N                 10
+  |     00007 0x0F – LESS_THAN_EQ               
+  |     00008 0x47 – POP_JUMP_IF_FALSE          30 (add 19 to IP)
+00004   00011 0x2D – LOAD_NATIVE                7 -> 'print'
+  |     00013 0x2B – LOAD_CONSTANT              1 -> (X equals )
+  |     00015 0x27 – GET_GLOBAL                 0 -> 'x'
   |     00017 0x00 – ADD                        
-  |     00018 0x27 – FUNC_CALL                  1
-00003   00020 0x21 – POP_STACK_TOP              
-00005   00021 0x28 – GET_GLOBAL                 0 -> 'x'
-  |     00023 0x14 – LOAD_IMM_1I                
+  |     00018 0x26 – FUNC_CALL                  1
+00003   00020 0x20 – POP_STACK_TOP              
+00005   00021 0x27 – GET_GLOBAL                 0 -> 'x'
+  |     00023 0x13 – LOAD_IMM_1I                
   |     00024 0x00 – ADD                        
-  |     00025 0x35 – SET_GLOBAL                 0 -> 'x'
-00004   00027 0x21 – POP_STACK_TOP              
-00003   00028 0x30 – LOOP_JUMP                  3 (sub 27 from IP)
+  |     00025 0x33 – SET_GLOBAL                 0 -> 'x'
+00004   00027 0x20 – POP_STACK_TOP              
+00003   00028 0x2E – LOOP_JUMP                  3 (sub 27 from IP)
 00000   00030 0x08 – END_VIRTUAL_MACHINE
 ```
 
@@ -135,10 +135,10 @@ cargo run --features show_raw_bytecode </path/to/program.ht>
 Which, for the above program, results in the following chunk of bytes:
 ```
 ==== <File '/path/to/file.ht'> ====
-0x12 0x26 0x00 0x28 0x00 0x2E 0x0A 0x10 
-0x49 0x00 0x13 0x2F 0x07 0x2D 0x01 0x28 
-0x00 0x00 0x27 0x01 0x21 0x28 0x00 0x14 
-0x00 0x35 0x00 0x21 0x30 0x1B 0x08 
+0x11 0x25 0x00 0x27 0x00 0x2C 0x0A 0x0F 
+0x47 0x00 0x13 0x2D 0x07 0x2B 0x01 0x27 
+0x00 0x00 0x26 0x01 0x20 0x27 0x00 0x13 
+0x00 0x33 0x00 0x20 0x2E 0x1B 0x08 
 
 Chunk Size: 31
 ================
