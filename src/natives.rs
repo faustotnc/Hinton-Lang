@@ -10,29 +10,56 @@ pub type NativeFn = fn(Vec<Object>) -> Result<Object, RuntimeResult>;
 
 /// Represents the list of native functions available through a Hinton program.
 pub struct Natives {
-    pub nat: HashMap<String, NativeFuncObj>,
     pub names: Vec<String>,
+    functions: HashMap<String, NativeFuncObj>,
+}
+
+/// The default implementation of a native function list.
+impl Default for Natives {
+    fn default() -> Self {
+        let mut natives = Natives {
+            functions: Default::default(),
+            names: Default::default(),
+        };
+
+        // >>>>>>>>>>>>>>>> Native functions to be added after this line
+        natives.add_native_function("assert", 1, 2, native_assert as NativeFn);
+        natives.add_native_function("assert_eq", 2, 3, native_assert_eq as NativeFn);
+        natives.add_native_function("assert_ne", 2, 3, native_assert_ne as NativeFn);
+        natives.add_native_function("clock", 0, 0, native_clock as NativeFn);
+        natives.add_native_function("input", 1, 1, native_input as NativeFn);
+        natives.add_native_function("iter", 1, 1, native_iter as NativeFn);
+        natives.add_native_function("next", 1, 1, native_next as NativeFn);
+        natives.add_native_function("print", 1, 1, native_print as NativeFn);
+        // <<<<<<<<<<<<<<<< Native functions to be added before this line
+
+        return natives;
+    }
 }
 
 impl Natives {
     // Adds a native function definition to the native functions list.
-    pub fn add_native_function(&mut self, name: &str, min_arity: u8, max_arity: u8, body: NativeFn) {
+    fn add_native_function(&mut self, name: &str, min_arity: u8, max_arity: u8, body: NativeFn) {
         let name = String::from(name);
 
-        let f = NativeFuncObj {
-            name: name.clone(),
-            min_arity,
-            max_arity,
-            function: body,
-        };
+        if !self.names.contains(&name) {
+            let f = NativeFuncObj {
+                name: name.clone(),
+                min_arity,
+                max_arity,
+                function: body,
+            };
 
-        self.nat.insert(name.clone(), f);
-        self.names.push(name);
+            self.functions.insert(name.clone(), f);
+            self.names.push(name);
+        } else {
+            panic!("Cannot duplicate native function '{}'.", name);
+        }
     }
 
     /// Finds and executes a native function by name.
     pub fn call_native(&mut self, name: &str, args: Vec<Object>) -> Result<Object, RuntimeResult> {
-        match self.nat.get(name) {
+        match self.functions.get(name) {
             Some(f) => {
                 let args_len = args.len() as u8;
 
@@ -74,36 +101,13 @@ impl Natives {
     pub fn get_native_fn_object(&self, idx: usize) -> Result<NativeFuncObj, RuntimeResult> {
         let name = &self.names[idx];
 
-        match self.nat.get(name) {
+        match self.functions.get(name) {
             Some(f) => Ok(f.to_owned()),
             None => Err(RuntimeResult::Error {
                 error: RuntimeErrorType::ReferenceError,
                 message: format!("No native function named '{}'.", name),
             }),
         }
-    }
-}
-
-/// The default implementation of a native function list.
-impl Default for Natives {
-    fn default() -> Self {
-        let mut natives = Natives {
-            nat: Default::default(),
-            names: Default::default(),
-        };
-
-        // >>>>>>>>>>>>>>>> Native functions to be added after this line
-        natives.add_native_function("assert", 1, 2, native_assert as NativeFn);
-        natives.add_native_function("assert_eq", 2, 3, native_assert_eq as NativeFn);
-        natives.add_native_function("assert_ne", 2, 3, native_assert_ne as NativeFn);
-        natives.add_native_function("clock", 0, 0, native_clock as NativeFn);
-        natives.add_native_function("input", 1, 1, native_input as NativeFn);
-        natives.add_native_function("iter", 1, 1, native_iter as NativeFn);
-        natives.add_native_function("next", 1, 1, native_next as NativeFn);
-        natives.add_native_function("print", 1, 1, native_print as NativeFn);
-        // <<<<<<<<<<<<<<<< Native functions to be added before this line
-
-        return natives;
     }
 }
 

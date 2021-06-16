@@ -24,7 +24,6 @@ pub enum OpCode {
     EndVirtualMachine,
     Equals,
     Expo,
-    ForLoopIterNext,
     GreaterThan,
     GreaterThanEq,
     Indexing,
@@ -61,7 +60,6 @@ pub enum OpCode {
     GetLocal,
     GetProp,
     GetUpVal,
-    JumpHasNextOrPop,
     LoadConstant,
     LoadImmN,
     LoadNative,
@@ -80,12 +78,12 @@ pub enum OpCode {
     // bytes (a short) as their operands.
     CloseUpValLong,
     DefineGlobalLong,
+    ForIterNextOrJump,
     GetGlobalLong,
     GetLocalLong,
     GetPropLong,
     GetUpValLong,
     JumpForward,
-    JumpHasNextOrPopLong,
     JumpIfFalseOrPop,
     JumpIfTrueOrPop,
     LoadConstantLong,
@@ -377,7 +375,6 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
             OpCode::Divide => op_code_name = "DIVIDE",
             OpCode::Equals => op_code_name = "EQUALS",
             OpCode::Expo => op_code_name = "EXPO",
-            OpCode::ForLoopIterNext => op_code_name = "FOR_LOOP_ITER_NEXT",
             OpCode::GreaterThan => op_code_name = "GREATER_THAN",
             OpCode::GreaterThanEq => op_code_name = "GREATER_THAN_EQ",
             OpCode::Indexing => op_code_name = "INDEXING",
@@ -416,13 +413,6 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
             OpCode::GetLocal => {
                 op_code_name = "GET_LOCAL";
                 get_operand(1);
-            }
-            OpCode::JumpHasNextOrPop => {
-                op_code_name = "JUMP_HAS_NEXT_OR_POP";
-                idx += 1;
-                // `idx + 1` because at runtime, the IP points to the next instruction
-                operand_val = format!("{}", (idx + 1) - chunk.get_byte(idx) as usize);
-                operand_val += &format!(" (sub {} from IP)", chunk.get_byte(idx));
             }
             OpCode::LoadConstant => {
                 op_code_name = "LOAD_CONSTANT";
@@ -517,16 +507,16 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
                 // `idx + 1` because at runtime, the IP points to the next instruction
                 operand_val = format!("{} (add {} to IP)", (idx + 1) + offset, offset);
             }
-            OpCode::JumpIfFalseOrPop => {
-                op_code_name = "JUMP_IF_FALSE_OR_POP";
-                get_operand(2);
-            }
-            OpCode::JumpHasNextOrPopLong => {
-                op_code_name = "JUMP_HAS_NEXT_OR_POP_LONG";
+            OpCode::ForIterNextOrJump => {
+                op_code_name = "FOR_ITER_NEXT_OR_JUMP";
                 idx += 2;
                 let offset = chunk.get_short(idx - 1) as usize;
                 // `idx + 1` because at runtime, the IP points to the next instruction
-                operand_val = format!("{} (sub {} from IP)", (idx + 1) - offset, offset);
+                operand_val = format!("{} (add {} to IP)", (idx + 1) + offset, offset);
+            }
+            OpCode::JumpIfFalseOrPop => {
+                op_code_name = "JUMP_IF_FALSE_OR_POP";
+                get_operand(2);
             }
             OpCode::JumpIfTrueOrPop => {
                 op_code_name = "JUMP_IF_TRUE_OR_POP";

@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use super::{RuntimeErrorType, RuntimeResult, VirtualMachine};
 use crate::{
     bytecode::OpCode,
-    natives::{get_next_in_iter, iter_has_next, make_iter},
+    natives::{get_next_in_iter, make_iter},
     objects::{ClassObject, ClosureObject, Object, RangeObject, TupleObject, UpValRef},
 };
 
@@ -87,29 +87,17 @@ impl<'a> VirtualMachine {
                     }
                 }
 
-                OpCode::ForLoopIterNext => {
-                    let tos = self.peek_stack(self.stack.len() - 1);
-
-                    match tos {
-                        Object::Iter(iter) => match get_next_in_iter(iter) {
-                            Ok(o) => self.push_stack(o),
-                            Err(_) => unreachable!("No more items to iterate in for-loop"),
-                        },
-                        _ => unreachable!("Cannot iterate object of type '{}'.", tos.type_name()),
-                    }
-                }
-
-                OpCode::JumpHasNextOrPop | OpCode::JumpHasNextOrPopLong => {
-                    let jump = self.get_std_or_long_operand(OpCode::JumpHasNextOrPop);
+                OpCode::ForIterNextOrJump => {
+                    let jump = self.get_next_short() as usize;
 
                     match self.peek_stack(self.stack.len() - 1) {
-                        Object::Iter(o) => {
-                            if iter_has_next(o) {
-                                self.current_frame_mut().ip -= jump;
-                            } else {
+                        Object::Iter(i) => match get_next_in_iter(i) {
+                            Ok(o) => self.push_stack(o),
+                            Err(_) => {
                                 self.pop_stack();
+                                self.current_frame_mut().ip += jump;
                             }
-                        }
+                        },
                         _ => unreachable!("Expected iterable object on TOS."),
                     };
                 }

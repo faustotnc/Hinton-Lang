@@ -1,6 +1,6 @@
 use super::{BreakScope, Compiler, LoopScope};
 use crate::{
-    ast::{BreakStmtNode, ForStmtNode, WhileStmtNode},
+    ast::{ForStmtNode, LoopBranchStmtNode, WhileStmtNode},
     bytecode::OpCode,
     compiler::{CompilerErrorType, LoopType, Symbol, SymbolType},
     lexer::tokens::Token,
@@ -66,10 +66,11 @@ impl Compiler {
         self.current_func_scope_mut().scope_depth += 1;
 
         // Begin the loop
-        self.emit_op_code(OpCode::ForLoopIterNext, loop_line_info);
-        let loop_start = self.current_chunk().len() - 1;
-        let depth = self.relative_scope_depth() + 1;
+        let loop_start = self.current_chunk().len();
+        let exit_jump = self.emit_jump(OpCode::ForIterNextOrJump, &stmt.token);
+
         // Starts this loop's break scope
+        let depth = self.relative_scope_depth() + 1;
         self.current_func_scope_mut().loops.push(LoopScope {
             position: loop_start,
             loop_type: LoopType::ForIn,
@@ -122,28 +123,9 @@ impl Compiler {
             self.emit_op_code(OpCode::PopStackTop, loop_line_info);
         }
 
-        // +2 to count the jump instruction and its one operand
-        let offset = (self.current_chunk().len() + 2) - loop_start;
-
-        // Jump back to the start of the loop if we haven't reached the end of the
-        // iterator. This instruction takes care of popping the loop's  variable.
-        if offset < 256 {
-            self.emit_op_code_with_byte(OpCode::JumpHasNextOrPop, offset as u8, loop_line_info);
-        } else {
-            // +3 to count the Jump instruction and its two operands
-            let offset = (self.current_chunk().len() + 3) - loop_start;
-
-            if offset < u16::MAX as usize {
-                self.emit_op_code_with_short(OpCode::JumpHasNextOrPopLong, offset as u16, loop_line_info);
-            } else {
-                self.error_at_token(
-                    &stmt.token,
-                    CompilerErrorType::MaxCapacity,
-                    "Loop body too large.",
-                );
-                return;
-            }
-        }
+        // Jump back to the start of the loop (including the re-execution of the condition)
+        self.emit_loop(loop_start, &stmt.token);
+        self.patch_jump(exit_jump, &stmt.token);
 
         // Closes & patches all breaks associated with this loop
         self.close_breaks(loop_start, &stmt.token);
@@ -179,12 +161,15 @@ impl Compiler {
     /// Compiles a `break` statement.
     ///
     /// * `stmt` – The `break` statement node being compiled.
-    pub(super) fn compile_break_stmt(&mut self, stmt: &BreakStmtNode) {
+    pub(super) fn compile_loop_branching_stmt(&mut self, stmt: &LoopBranchStmtNode) {
         if self.current_function_scope().loops.len() == 0 {
             self.error_at_token(
                 &stmt.token,
                 CompilerErrorType::Syntax,
-                "Cannot break outside of loop.",
+                &format!(
+                    "Cannot have '{}' statement outside of loop.",
+                    if stmt.is_break { "break" } else { "continue" }
+                ),
             );
             return;
         }
@@ -195,22 +180,31 @@ impl Compiler {
                 .s_table
                 .pop_scope(current_loop.scope_depth, false, false);
 
-        // If we are breaking inside a for-in loop, also pop the loop's variable
+        // If we are branching inside a for-in loop, also pop the loop's variable
         // and the iterator off the stack before exiting the loop.
         if let super::LoopType::ForIn = current_loop.loop_type {
-            popped_scope.append(&mut vec![false, false]);
+            if stmt.is_break {
+                popped_scope.append(&mut vec![false, false]);
+            } else {
+                popped_scope.append(&mut vec![false]);
+            }
         }
 
         // Emit the pop instructions
         self.emit_stack_pops(popped_scope, &stmt.token);
 
-        // Jump out of the loop
-        let break_pos = self.emit_jump(OpCode::JumpForward, &stmt.token);
+        if stmt.is_break {
+            // Jump out of the loop
+            let break_pos = self.emit_jump(OpCode::JumpForward, &stmt.token);
 
-        // Add to the breaks list to breaks associated with the current loop
-        self.current_func_scope_mut().breaks.push(BreakScope {
-            parent_loop: current_loop,
-            loop_position: break_pos,
-        })
+            // Adds this break to the breaks list associated with the current loop
+            // so that it can be patched later.
+            self.current_func_scope_mut().breaks.push(BreakScope {
+                parent_loop: current_loop,
+                loop_position: break_pos,
+            })
+        } else {
+            self.emit_loop(current_loop.position, &stmt.token);
+        }
     }
 }

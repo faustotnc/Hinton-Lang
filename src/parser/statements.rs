@@ -51,9 +51,19 @@ impl Parser {
         } else if self.matches(&BREAK_KW) {
             let tok = self.previous.clone();
             self.consume(&SEMICOLON, "Expected ';' after break keyword.");
-            return Some(BreakStmt(BreakStmtNode { token: tok.clone() }));
+
+            return Some(LoopBranch(LoopBranchStmtNode {
+                token: tok.clone(),
+                is_break: true,
+            }));
         } else if self.matches(&CONTINUE_KW) {
-            todo!("Implement continue")
+            let tok = self.previous.clone();
+            self.consume(&SEMICOLON, "Expected ';' after continue keyword.");
+
+            return Some(LoopBranch(LoopBranchStmtNode {
+                token: tok.clone(),
+                is_break: false,
+            }));
         } else if self.matches(&RETURN_KW) {
             self.parse_return_stmt()
         } else {

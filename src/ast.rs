@@ -27,10 +27,10 @@ pub enum ASTNode {
 
     // Statements
     BlockStmt(BlockNode),
-    BreakStmt(BreakStmtNode),
     ExpressionStmt(ExpressionStmtNode),
     ForStmt(ForStmtNode),
     IfStmt(IfStmtNode),
+    LoopBranch(LoopBranchStmtNode),
     ReturnStmt(ReturnStmtNode),
     WhileStmt(WhileStmtNode),
 }
@@ -219,8 +219,9 @@ pub struct ForStmtNode {
 }
 
 #[derive(Clone)]
-pub struct BreakStmtNode {
+pub struct LoopBranchStmtNode {
     pub token: Token,
+    pub is_break: bool,
 }
 
 #[derive(Clone)]
