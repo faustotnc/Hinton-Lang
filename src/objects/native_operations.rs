@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use crate::errors::ObjectOprErrType;
 
 use super::Object;
@@ -40,48 +38,30 @@ impl std::ops::Add<Object> for Object {
                 Object::Int(rhs) => Ok(Object::Int(lhs + rhs)),
                 Object::Float(rhs) => Ok(Object::Float(lhs as f64 + rhs)),
                 Object::Bool(rhs) => Ok(Object::Int(lhs + if rhs { 1 } else { 0 })),
-                Object::String(rhs) => {
-                    let val = format!("{}{}", lhs, *rhs.borrow());
-                    let val = Rc::new(RefCell::new(val));
-                    Ok(Object::String(val))
-                }
+                Object::String(rhs) => Ok(Object::String(format!("{}{}", lhs, rhs))),
                 _ => return error_msg,
             },
             Object::Float(lhs) => match rhs {
                 Object::Int(rhs) => Ok(Object::Float(lhs + rhs as f64)),
                 Object::Float(rhs) => Ok(Object::Float(lhs + rhs)),
                 Object::Bool(rhs) => Ok(Object::Float(lhs + if rhs { 1f64 } else { 0f64 })),
-                Object::String(rhs) => {
-                    let val = format!(
-                        "{}{}{}",
-                        lhs,
-                        if lhs.fract() == 0.0 { ".0" } else { "" },
-                        *rhs.borrow()
-                    );
-
-                    Ok(Object::String(Rc::new(RefCell::new(val))))
-                }
+                Object::String(rhs) => Ok(Object::String(format!(
+                    "{}{}{}",
+                    lhs,
+                    if lhs.fract() == 0.0 { ".0" } else { "" },
+                    rhs
+                ))),
                 _ => return error_msg,
             },
             Object::String(lhs) => match rhs {
-                Object::Int(rhs) => {
-                    let val = format!("{}{}", *lhs.borrow_mut(), rhs);
-                    Ok(Object::String(Rc::new(RefCell::new(val))))
-                }
-                Object::Float(rhs) => {
-                    let val = format!(
-                        "{}{}{}",
-                        *lhs.borrow_mut(),
-                        rhs,
-                        if rhs.fract() == 0.0 { ".0" } else { "" }
-                    );
-
-                    Ok(Object::String(Rc::new(RefCell::new(val))))
-                }
-                Object::String(rhs) => {
-                    let val = format!("{}{}", *lhs.borrow_mut(), *rhs.borrow());
-                    Ok(Object::String(Rc::new(RefCell::new(val))))
-                }
+                Object::Int(rhs) => Ok(Object::String(format!("{}{}", lhs, rhs))),
+                Object::Float(rhs) => Ok(Object::String(format!(
+                    "{}{}{}",
+                    lhs,
+                    rhs,
+                    if rhs.fract() == 0.0 { ".0" } else { "" }
+                ))),
+                Object::String(rhs) => Ok(Object::String(format!("{}{}", lhs, rhs))),
                 _ => return error_msg,
             },
             Object::Bool(lhs) if lhs => match rhs {
@@ -158,11 +138,7 @@ impl std::ops::Mul<Object> for Object {
                 Object::Int(rhs) => Ok(Object::Int(lhs.saturating_mul(rhs))),
                 Object::Float(rhs) => Ok(Object::Float(lhs as f64 * rhs)),
                 Object::Bool(rhs) => Ok(Object::Int(if rhs { lhs } else { 0 })),
-                Object::String(rhs) => {
-                    let val = &*rhs.borrow();
-                    let val = Rc::new(RefCell::new(val.repeat(lhs as usize)));
-                    Ok(Object::String(val))
-                }
+                Object::String(rhs) => Ok(Object::String(rhs.repeat(lhs as usize))),
                 _ => return error_msg,
             },
             Object::Float(lhs) => match rhs {
@@ -172,11 +148,7 @@ impl std::ops::Mul<Object> for Object {
                 _ => return error_msg,
             },
             Object::String(lhs) => match rhs {
-                Object::Int(rhs) => {
-                    let val = &*lhs.borrow();
-                    let val = Rc::new(RefCell::new(val.repeat(rhs as usize)));
-                    Ok(Object::String(val))
-                }
+                Object::Int(rhs) => Ok(Object::String(lhs.repeat(rhs as usize))),
                 _ => return error_msg,
             },
             Object::Bool(lhs) if lhs => match rhs {

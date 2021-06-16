@@ -3,7 +3,7 @@ use super::{
     Compiler,
 };
 use crate::{ast::*, bytecode::OpCode, errors::CompilerErrorType, lexer::tokens::Token, objects::Object};
-use std::{borrow::Borrow, cell::RefCell, rc::Rc};
+use std::borrow::Borrow;
 
 impl Compiler {
     /// Compiles an expression statement.
@@ -64,9 +64,7 @@ impl Compiler {
     /// ## Arguments
     /// * `token` – The token associated with this global declaration.
     pub(super) fn define_as_global(&mut self, token: &Token) {
-        let name = Object::String(Rc::new(RefCell::new(token.lexeme.clone())));
-
-        if let Some(idx) = self.add_literal_to_pool(name, token, false) {
+        if let Some(idx) = self.add_literal_to_pool(Object::String(token.lexeme.clone()), token, false) {
             let pos = (token.line_num, token.column_num);
 
             if idx < 256 {
@@ -279,7 +277,7 @@ impl Compiler {
     /// * `decl` – The class declaration statement node being compiled.
     pub(super) fn compile_class_declaration(&mut self, decl: &ClassDeclNode) {
         if let Ok(symbol_pos) = self.declare_symbol(&decl.name, SymbolType::Class) {
-            let str_name = Object::String(Rc::new(RefCell::new(decl.name.lexeme.clone())));
+            let str_name = Object::String(decl.name.lexeme.clone());
             let name_line_info = (decl.name.line_num, decl.name.column_num);
 
             if let Some(name_pool_pos) = self.add_literal_to_pool(str_name, &decl.name, false) {

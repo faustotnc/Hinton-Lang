@@ -111,7 +111,7 @@ pub enum Object {
     Function(Rc<RefCell<FuncObject>>),
     Instance(Rc<RefCell<InstanceObject>>),
     Iter(Rc<RefCell<IterObject>>),
-    String(Rc<RefCell<String>>),
+    String(String),
     Tuple(Box<TupleObject>),
 
     // Internal
@@ -201,7 +201,7 @@ impl Object {
         }
     }
 
-    pub fn as_string(&self) -> Option<&Rc<RefCell<String>>> {
+    pub fn as_string(&self) -> Option<&String> {
         match self {
             Object::String(s) => Some(s),
             _ => None,
@@ -283,7 +283,7 @@ impl Object {
         // At this point, the operands have the same type, so we
         // proceed to check if they match in value.
         return match self {
-            Object::String(a) => (*a.borrow() == *right.as_string().unwrap().borrow()),
+            Object::String(a) => (a == right.as_string().unwrap()),
             Object::Array(a) => {
                 let a = &a.borrow();
                 let b = &right.as_array().unwrap().borrow();
@@ -359,7 +359,7 @@ impl<'a> fmt::Display for Object {
                     + String::from("\x1b[0m").as_str();
                 fmt::Display::fmt(&str, f)
             }
-            Object::String(ref inner) => fmt::Display::fmt(&*inner.borrow().as_str(), f),
+            Object::String(ref inner) => fmt::Display::fmt(inner.as_str(), f),
             Object::Bool(inner) => {
                 let str = if inner {
                     String::from("\x1b[38;5;3mtrue\x1b[0m")

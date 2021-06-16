@@ -48,7 +48,7 @@ impl<'a> VirtualMachine {
                     // Gets the name from the pool assigns the value to the global
                     if let Object::String(name) = self.read_constant(pos).clone() {
                         let val = self.pop_stack();
-                        self.globals.insert(name.borrow().clone(), val);
+                        self.globals.insert(name, val);
                     } else {
                         unreachable!("Expected a string for global declaration name.");
                     }
@@ -59,7 +59,7 @@ impl<'a> VirtualMachine {
 
                     // Gets the name from the pool
                     if let Object::String(name) = self.read_constant(pos).clone() {
-                        let val = self.globals.get(&*name.borrow()).unwrap().clone();
+                        let val = self.globals.get(&name).unwrap().clone();
                         self.push_stack(val);
                     } else {
                         unreachable!("Expected a string as global declaration name.");
@@ -72,7 +72,7 @@ impl<'a> VirtualMachine {
                     // Gets the name from the pool
                     if let Object::String(name) = self.read_constant(pos).clone() {
                         let val = self.stack.last().unwrap().clone();
-                        self.globals.insert(name.borrow().clone(), val);
+                        self.globals.insert(name, val);
                     } else {
                         unreachable!("Expected a string as global declaration name.");
                     }
@@ -425,9 +425,7 @@ impl<'a> VirtualMachine {
                         _ => unreachable!("Expected a native function name on TOS."),
                     };
 
-                    let name = &name.borrow().clone();
-
-                    match natives::get_native_fn(name) {
+                    match natives::get_native_fn(&name) {
                         Ok(f) => self.push_stack(Object::Native(Box::new(f))),
                         Err(e) => return e,
                     }
@@ -591,9 +589,7 @@ impl<'a> VirtualMachine {
                         _ => unreachable!("Expected string for class name."),
                     };
 
-                    let new_class = Object::Class(ClassObject {
-                        name: name.borrow().clone(),
-                    });
+                    let new_class = Object::Class(ClassObject { name });
                     self.push_stack(new_class);
                 }
 
@@ -623,15 +619,15 @@ impl<'a> VirtualMachine {
 
                     match self.pop_stack() {
                         Object::Instance(x) => {
-                            if x.borrow().fields.contains_key(&*prop_name.borrow()) {
-                                let val = x.borrow().fields.get(&*prop_name.borrow()).unwrap().clone();
+                            if x.borrow().fields.contains_key(&prop_name) {
+                                let val = x.borrow().fields.get(&prop_name).unwrap().clone();
                                 self.push_stack(val);
                             } else {
                                 return RuntimeResult::Error {
                                     error: RuntimeErrorType::ReferenceError,
                                     message: format!(
                                         "Property '{}' not defined for object of type '{}'.",
-                                        &*prop_name.borrow(),
+                                        prop_name,
                                         x.borrow().class.name
                                     ),
                                 };
@@ -656,9 +652,7 @@ impl<'a> VirtualMachine {
                         // a variable. It only modifies the cloned instance that is currently
                         // on top of the stack. We need a heap to store class instances.
                         Object::Instance(x) => {
-                            x.borrow_mut()
-                                .fields
-                                .insert(prop_name.borrow().clone(), value.clone());
+                            x.borrow_mut().fields.insert(prop_name, value.clone());
                             self.push_stack(value);
                         }
                         _ => todo!("Other objects also have properties."),

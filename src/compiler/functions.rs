@@ -50,8 +50,7 @@ impl Compiler {
                 });
 
                 // Add the function's name to the pool of the function
-                let fn_name = Object::String(Rc::new(RefCell::new(decl.name.lexeme.clone())));
-                self.add_literal_to_pool(fn_name, &decl.name, false);
+                self.add_literal_to_pool(Object::String(decl.name.lexeme.clone()), &decl.name, false);
                 // compiles the parameter declarations so that the compiler
                 // knows about their their lexical scoping (their stack position),
                 // but does not compile the default value for named parameters.
