@@ -9,7 +9,7 @@ Though this interpreter is based on the Crafting Interpreters book, it implement
 
 * Hinton source code is first parsed into an Abstract Syntax Tree (AST), then compiled to bytecode, then interpreted by the VM. This is because traversing the AST allows for easier bytecode generation and optimization (optimization strategies will be added later).
 
-* Hinton has extra built-in data structures like `Arrays`, `Tuples`, `Iterators`, and `Ranges`.
+* Hinton has extra built-in data structures like `Arrays`, `Tuples`, `Iterators`, `Ranges`, and `Dictionaries`.
 
 * Hinton has extra built-in functions like:
     * `print(...)`: To print to the console,
@@ -145,16 +145,12 @@ Chunk Size: 31
 ```
 
 ## Missing Features
-As mentioned before, Hinton is a work in progress. And as a matter of fact, I am only in [Chapter #25](https://craftinginterpreters.com/closures.html) of the Crafting Interpreters book. After adding functions and calls, the chapters of the book that follow become a lot more complex and harder to translate to Rust code that can work with the current implementation of Hinton. Because of this, I am trying to add as many smaller features as possible and improve the three components of the interpreter before moving on. However, I cannot assure you that those remaining features will be added anytime soon. Here is a list of features that Hinton is currently missing and that may take longer to be added:
+I initially started reading the Crafting Interpreters book with no knowledge of compilers, interpreters, ASTs, or bytecode. I also did not know how to write Rust programs until February of 2021 (and I still have a lot to learn about it). Because of this, translating the code found in the last chapters of the book has been quite difficult. Even with those challenges, I am still trying to add as many smaller features as possible while also trying to improve the three components of the interpreter before moving on. Here is a list of features that Hinton is currently missing and that may take longer to be added:
 * Lambda expressions.
 * Garbage Collection
 * Classes & Inheritance
 * Importing Modules
-
-Because accessing class members is similar to accessing dictionary members, Hinton is also missing:
-* Dictionaries
-* Enums
-* Calling functions from native objects like `Array.len()`
+* Native methods bound to primitive objects (i.e., `Array.len()`)
 
 ## Contributing
 Because I am creating Hinton to learn about compiler/interpreter design and programming language implementation, I will not be accepting any pull requests that add any of the above *missing features* to Hinton (I want to learn how to do it myself). However, any other contributions that improve the current state of the interpreter are welcomed. For a list of planned features or issues to which you can contribute visit the [Planned Features](https://github.com/hinton-lang/Hinton/projects/1) or [Issues](https://github.com/hinton-lang/Hinton/issues) page.

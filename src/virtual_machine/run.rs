@@ -1,10 +1,10 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::{RuntimeErrorType, RuntimeResult, VirtualMachine};
 use crate::{
     bytecode::OpCode,
     natives::{get_next_in_iter, make_iter},
-    objects::{ClassObject, ClosureObject, Object, RangeObject, TupleObject, UpValRef},
+    objects::{ClassObject, ClosureObject, Object, RangeObject, UpValRef},
 };
 
 impl<'a> VirtualMachine {
@@ -124,8 +124,27 @@ impl<'a> VirtualMachine {
                         tuple_values.push(self.pop_stack());
                     }
 
-                    let tup = Box::new(TupleObject { tup: tuple_values });
+                    let tup = Box::new(tuple_values);
                     self.push_stack(Object::Tuple(tup));
+                }
+
+                OpCode::MakeDict | OpCode::MakeDictLong => {
+                    // The number of values to pop from the stack. Essentially the size of the array.
+                    let size = self.get_std_or_long_operand(OpCode::MakeDict);
+                    let mut dict: HashMap<String, Object> = HashMap::new();
+
+                    for _ in 0..size {
+                        let value = self.pop_stack();
+
+                        match self.pop_stack() {
+                            Object::String(key) => {
+                                dict.insert(key, value);
+                            }
+                            _ => unreachable!("Expected string for dictionary key."),
+                        }
+                    }
+
+                    self.push_stack(Object::Dict(Rc::new(RefCell::new(dict))));
                 }
 
                 OpCode::Indexing => {
@@ -618,6 +637,20 @@ impl<'a> VirtualMachine {
                                 };
                             }
                         }
+                        Object::Dict(x) => {
+                            if x.borrow().contains_key(&prop_name) {
+                                let val = x.borrow().get(&prop_name).unwrap().clone();
+                                self.push_stack(val);
+                            } else {
+                                return RuntimeResult::Error {
+                                    error: RuntimeErrorType::ReferenceError,
+                                    message: format!(
+                                        "Entry with key '{}' not found in dictionary.",
+                                        prop_name
+                                    ),
+                                };
+                            }
+                        }
                         _ => todo!("Other objects also have properties."),
                     }
                 }
@@ -633,9 +666,6 @@ impl<'a> VirtualMachine {
                     let value = self.pop_stack();
 
                     match self.pop_stack() {
-                        // TODO: This does not actually modify the instance object assigned to
-                        // a variable. It only modifies the cloned instance that is currently
-                        // on top of the stack. We need a heap to store class instances.
                         Object::Instance(x) => {
                             x.borrow_mut().fields.insert(prop_name, value.clone());
                             self.push_stack(value);

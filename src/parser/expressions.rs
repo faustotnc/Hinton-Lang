@@ -607,6 +607,7 @@ impl<'a> Parser {
     /// `Option<ASTNode>` – The expression's AST node.
     pub(super) fn parse_primary(&mut self) -> Option<ASTNode> {
         self.advance();
+        let literal_token = self.previous.clone();
 
         let literal_value = match self.get_previous_tok_type() {
             STRING => self.compile_string(),
@@ -657,6 +658,9 @@ impl<'a> Parser {
                     };
                 }
             }
+            L_CURLY => {
+                return self.parse_dictionary();
+            }
             IDENTIFIER => {
                 // For identifier expressions, the only information we need is enclosed within the token.
                 // So we return the token wrapped inside an ASTNode::Identifier.
@@ -687,12 +691,10 @@ impl<'a> Parser {
             }
         };
 
-        let node = LiteralExprNode {
+        return Some(Literal(LiteralExprNode {
             value: literal_value,
-            token: self.current.clone(),
-        };
-
-        return Some(Literal(node));
+            token: literal_token,
+        }));
     }
 
     /// Compiles a string token to a Hinton String.
@@ -856,6 +858,51 @@ impl<'a> Parser {
         }));
     }
 
+    fn parse_dictionary(&mut self) -> Option<ASTNode> {
+        let token = self.previous.clone();
+        let mut keys: Vec<Token> = vec![];
+        let mut values: Vec<ASTNode> = vec![];
+
+        if !self.check(&R_CURLY) {
+            loop {
+                // Parses the key
+                match self.parse_primary() {
+                    Some(Identifier(id)) => keys.push(id.token),
+                    Some(Literal(lit)) => match lit.value {
+                        Object::String(_) => keys.push(lit.token),
+                        _ => {
+                            self.error_at_previous("Expected an identifier of a string for dictionary key.");
+                            return None;
+                        }
+                    },
+                    _ => {
+                        self.error_at_previous("Expected an identifier of a string for dictionary key.");
+                        return None;
+                    }
+                }
+
+                // Consumes the colon
+                self.consume(&COLON, "Expected ':' after dictionary key.");
+
+                // Consumes the value
+                match self.parse_expression() {
+                    Some(node) => values.push(node),
+                    None => return None,
+                }
+
+                // If matches a comma, consume next
+                if self.matches(&COMMA) {
+                    continue;
+                }
+
+                self.consume(&R_CURLY, "Expected '}' after dictionary.");
+                break;
+            }
+        }
+
+        return Some(Dictionary(DictionaryExprNode { keys, values, token }));
+    }
+
     /// Parses an array indexing expression as specified in the grammar.bnf file.
     ///
     /// ## Returns
@@ -919,7 +966,7 @@ impl<'a> Parser {
                     continue;
                 }
 
-                self.consume(&&R_PARENTHESIS, "Expected ')' after arguments.");
+                self.consume(&R_PARENTHESIS, "Expected ')' after arguments.");
                 break;
             }
         }

@@ -90,11 +90,6 @@ pub struct InstanceObject {
     pub fields: HashMap<String, Object>,
 }
 
-#[derive(Clone)]
-pub struct TupleObject {
-    pub tup: Vec<Object>,
-}
-
 /// All types of objects in Hinton
 #[derive(Clone)]
 pub enum Object {
@@ -108,11 +103,12 @@ pub enum Object {
     // Heap-allocated
     // TODO: Test for reference cycles.
     Array(Rc<RefCell<Vec<Object>>>),
+    Dict(Rc<RefCell<HashMap<String, Object>>>),
     Function(Rc<RefCell<FuncObject>>),
     Instance(Rc<RefCell<InstanceObject>>),
     Iter(Rc<RefCell<IterObject>>),
     String(String),
-    Tuple(Box<TupleObject>),
+    Tuple(Box<Vec<Object>>),
 
     // Internal
     Closure(ClosureObject),
@@ -120,25 +116,21 @@ pub enum Object {
 }
 
 impl Object {
-    pub fn type_name(&self) -> &str {
+    pub fn type_name(&self) -> String {
         return match self {
-            &Self::Array(_) => "Array",
-            &Self::Bool(_) => "Bool",
-            &Self::Float(_) => "Float",
-            &Self::Function(_) | Self::Native(_) | &Self::Closure(_) => "Function",
-            &Self::Int(_) => "Int",
-            &Self::Iter(_) => "Iter",
-            &Self::Null => "Null",
-            &Self::Range(_) => "Range",
-            &Self::String(_) => "String",
-            &Self::Tuple(_) => "Tuple",
-            Self::Class(c) => c.name.as_str(),
-            Self::Instance(_i) => {
-                // let s = i.borrow().class.name.to_owned();
-
-                // s.as_str()
-                "k"
-            }
+            Self::Array(_) => String::from("Array"),
+            Self::Bool(_) => String::from("Bool"),
+            Self::Dict(_) => String::from("Dict"),
+            Self::Float(_) => String::from("Float"),
+            Self::Function(_) | Self::Native(_) | &Self::Closure(_) => String::from("Function"),
+            Self::Int(_) => String::from("Int"),
+            Self::Iter(_) => String::from("Iter"),
+            Self::Null => String::from("Null"),
+            Self::Range(_) => String::from("Range"),
+            Self::String(_) => String::from("String"),
+            Self::Tuple(_) => String::from("Tuple"),
+            Self::Class(c) => c.name.clone(),
+            Self::Instance(i) => i.borrow().class.name.clone(),
         };
     }
 
@@ -229,7 +221,7 @@ impl Object {
         }
     }
 
-    pub fn as_tuple(&self) -> Option<&Box<TupleObject>> {
+    pub fn as_tuple(&self) -> Option<&Box<Vec<Object>>> {
         match self {
             Object::Tuple(v) => Some(v),
             _ => None,
@@ -305,8 +297,7 @@ impl Object {
                 }
             }
             Object::Tuple(a) => {
-                let a = &a.tup;
-                let b = &right.as_tuple().unwrap().tup;
+                let b = &right.as_tuple().unwrap();
 
                 // If the tuples differ in size, they must differ in value. However, if they
                 // are equal in size, then we must check that each item match.
@@ -385,11 +376,9 @@ impl<'a> fmt::Display for Object {
                 write!(f, "{}", arr_str)
             }
             Object::Tuple(ref inner) => {
-                let arr = &inner.tup;
-
                 let mut arr_str = String::from("(");
-                for (idx, obj) in arr.iter().enumerate() {
-                    if idx == arr.len() - 1 {
+                for (idx, obj) in inner.iter().enumerate() {
+                    if idx == inner.len() - 1 {
                         arr_str += &(format!("{}", obj))[..]
                     } else {
                         arr_str += &(format!("{}, ", obj))[..];
@@ -422,7 +411,7 @@ impl<'a> fmt::Display for Object {
                 fmt::Display::fmt(&str, f)
             }
             Object::Closure(ref inner) => {
-                let name = &inner.function.borrow_mut().name;
+                let name = &inner.function.borrow().name;
 
                 let str = if name == "" {
                     String::from("<Func script>")
@@ -439,6 +428,21 @@ impl<'a> fmt::Display for Object {
             Object::Native(ref inner) => {
                 let str = format!("<NativeFn '{}'>", inner.name);
                 fmt::Display::fmt(&str, f)
+            }
+            Object::Dict(ref inner) => {
+                let mut arr_str = String::from("{");
+
+                for (idx, key) in inner.borrow().keys().enumerate() {
+                    if idx == inner.borrow().keys().len() - 1 {
+                        arr_str += &(format!("'{}': {}", key, inner.borrow().get(key).unwrap()))[..]
+                    } else {
+                        arr_str += &(format!("'{}': {}, ", key, inner.borrow().get(key).unwrap()))[..]
+                    }
+                }
+
+                arr_str += "}";
+
+                write!(f, "{}", arr_str)
             }
             Object::Null => f.write_str("\x1b[37;1mnull\x1b[0m"),
         }

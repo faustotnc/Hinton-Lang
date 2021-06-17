@@ -6,7 +6,7 @@ impl Object {
     pub fn get_at_index(&self, index: &Object) -> Result<Object, ObjectOprErrType> {
         match self {
             Object::Array(arr) => index_array(&arr.borrow(), index),
-            Object::Tuple(tup) => index_tuple(&tup.tup, index),
+            Object::Tuple(tup) => index_tuple(&tup, index),
             Object::String(str) => index_string(&str, index),
             Object::Range(range) => index_range(range, index),
             _ => {

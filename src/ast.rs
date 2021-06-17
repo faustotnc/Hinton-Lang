@@ -18,6 +18,7 @@ pub enum ASTNode {
     Unary(UnaryExprNode),
     VarReassignment(VarReassignmentExprNode),
     Instance(FunctionCallExprNode),
+    Dictionary(DictionaryExprNode),
 
     // Declarations
     ClassDecl(ClassDeclNode),
@@ -74,6 +75,13 @@ pub struct ArrayExprNode {
 #[derive(Clone)]
 pub struct TupleExprNode {
     pub values: Vec<Box<ASTNode>>,
+    pub token: Token,
+}
+
+#[derive(Clone)]
+pub struct DictionaryExprNode {
+    pub keys: Vec<Token>,
+    pub values: Vec<ASTNode>,
     pub token: Token,
 }
 

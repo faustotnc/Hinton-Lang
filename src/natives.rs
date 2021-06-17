@@ -211,7 +211,7 @@ pub fn iter_has_next(o: &Rc<RefCell<IterObject>>) -> bool {
 
     let len = match o.iter.borrow() {
         Object::String(ref x) => x.len(),
-        Object::Tuple(ref x) => x.tup.len(),
+        Object::Tuple(ref x) => x.len(),
         Object::Range(ref x) => i64::abs(x.max - x.min) as usize,
         Object::Array(ref x) => {
             let a = &x.borrow_mut();

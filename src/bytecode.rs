@@ -66,6 +66,7 @@ pub enum OpCode {
     LoopJump,
     MakeArray,
     MakeClass,
+    MakeDict,
     MakeInstance,
     MakeTuple,
     SetGlobal,
@@ -91,6 +92,7 @@ pub enum OpCode {
     LoopJumpLong,
     MakeArrayLong,
     MakeClassLong,
+    MakeDictLong,
     MakeTupleLong,
     PopJumpIfFalse,
     SetGlobalLong,
@@ -473,6 +475,10 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
                 op_code_name = "MAKE_TUPLE";
                 get_operand(1);
             }
+            OpCode::MakeDict => {
+                op_code_name = "MAKE_DICT";
+                get_operand(1);
+            }
             OpCode::SetLocal => {
                 op_code_name = "SET_LOCAL";
                 get_operand(1);
@@ -559,6 +565,10 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
             }
             OpCode::MakeTupleLong => {
                 op_code_name = "MAKE_TUPLE_LONG";
+                get_operand(2);
+            }
+            OpCode::MakeDictLong => {
+                op_code_name = "MAKE_DICT_LONG";
                 get_operand(2);
             }
             OpCode::PopJumpIfFalse => {

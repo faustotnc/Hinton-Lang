@@ -168,6 +168,7 @@ impl Compiler {
             ASTNode::BlockStmt(x) => self.compile_block_stmt(x),
             ASTNode::ClassDecl(x) => self.compile_class_declaration(x),
             ASTNode::ConstantDecl(x) => self.compile_constant_decl(x),
+            ASTNode::Dictionary(x) => self.compile_dictionary(x),
             ASTNode::ExpressionStmt(x) => self.compile_expression_stmt(x),
             ASTNode::ForStmt(x) => self.compile_for_stmt(x),
             ASTNode::FunctionCall(x) => self.compile_instance_or_func_call_expr(x, false),

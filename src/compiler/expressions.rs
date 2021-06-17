@@ -388,6 +388,53 @@ impl Compiler {
         }
     }
 
+    pub(super) fn compile_dictionary(&mut self, expr: &DictionaryExprNode) {
+        let pair_count = expr.keys.len();
+        let pos = (expr.token.line_num, expr.token.column_num);
+
+        // Prevent having too many key-value pairs for the dictionary.
+        if pair_count > u16::MAX as usize {
+            self.error_at_token(
+                &expr.token,
+                CompilerErrorType::MaxCapacity,
+                "Too many key-value pairs in dictionary.",
+            );
+
+            return;
+        }
+
+        // Compile the key-value pairs and leave them on the stack
+        for (key, value) in expr.keys.iter().zip(expr.values.iter()) {
+            // Get the key name from the token
+            let name = if key.lexeme.starts_with("\"") {
+                let lexeme = key.lexeme.clone();
+
+                // Remove outer quotes from the source string
+                let lexeme = &lexeme[1..(lexeme.len() - 1)];
+
+                // Replace escaped characters with the actual representations
+                lexeme
+                    .replace("\\n", "\n")
+                    .replace("\\t", "\t")
+                    .replace("\\r", "\r")
+                    .replace("\\\\", "\\")
+                    .replace("\\\"", "\"")
+            } else {
+                key.lexeme.clone()
+            };
+
+            self.add_literal_to_pool(Object::String(name), key, true);
+            self.compile_node(value);
+        }
+
+        // Emit instruction to make the dictionary at runtime
+        if pair_count < 256 {
+            self.emit_op_code_with_byte(OpCode::MakeDict, pair_count as u8, pos);
+        } else {
+            self.emit_op_code_with_short(OpCode::MakeDictLong, pair_count as u16, pos);
+        }
+    }
+
     /// Compiles an array indexing expression.
     ///
     /// # Arguments
