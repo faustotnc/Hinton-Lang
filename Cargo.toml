@@ -8,7 +8,6 @@ edition = "2018"
 
 [features]
 # Run `cargo run --features bench_time | show_bytecode`
-bench_time = []
 show_bytecode = []
 show_raw_bytecode = []
 

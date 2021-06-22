@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="CargoProjects">
+    <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="01377ebb-e361-4782-8382-eca9171c4216" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/Hinton-Lang.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/rustfmt.toml" beforeDir="false" afterPath="$PROJECT_DIR$/rustfmt.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ast.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/ast.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bytecode.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bytecode.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compiler/expressions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/expressions.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compiler/functions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/functions.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compiler/loops.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/loops.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compiler/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compiler/resolver.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/resolver.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compiler/statements.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/statements.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compiler/symbols.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/symbols.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/errors.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/errors.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lexer/lex_next_token.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lexer/lex_next_token.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lexer/lex_numbers.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lexer/lex_numbers.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lexer/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lexer/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lexer/tokens.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lexer/tokens.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/natives.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/natives.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/objects/indexing.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/indexing.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/objects/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/objects/native_operations.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/native_operations.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/parser/expressions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/expressions.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/parser/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/parser/statements.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/statements.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/tests/compiler.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/tests/compiler.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/tests/parser.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/tests/parser.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/virtual_machine/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/virtual_machine/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/virtual_machine/run.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/virtual_machine/run.rs" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MacroExpansionManager">
+    <option name="directoryName" value="j2k46s8z" />
+  </component>
+  <component name="ProjectId" id="1uHRQwqtykRYnoxSAMqKg2FF90E" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="ASKED_SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
+    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
+    <property name="android.sdk.path" value="$USER_HOME$/AppData/Local/Android/Sdk" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
+    <property name="project.structure.last.edited" value="Modules" />
+    <property name="project.structure.proportion" value="0.0" />
+    <property name="project.structure.side.proportion" value="0.0" />
+    <property name="settings.editor.selected.configurable" value="language.rust.rustfmt" />
+  </component>
+  <component name="RunManager" selected="Cargo.Run Development">
+    <configuration name="Format" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="fmt" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <option name="channel" value="DEFAULT" />
+      <option name="allFeatures" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <envs />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Run Development" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run ./development/test.ht" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <option name="channel" value="DEFAULT" />
+      <option name="allFeatures" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <envs />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Run Hinton Test" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="run ./src/tests/Hinton/test.ht" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <option name="channel" value="DEFAULT" />
+      <option name="allFeatures" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <envs />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="command" value="test" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <option name="channel" value="DEFAULT" />
+      <option name="allFeatures" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <envs />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <list>
+      <item itemvalue="Cargo.Run Development" />
+      <item itemvalue="Cargo.Run Hinton Test" />
+      <item itemvalue="Cargo.Format" />
+      <item itemvalue="Cargo.Test" />
+    </list>
+  </component>
+  <component name="RustProjectSettings">
+    <option name="runRustfmtOnSave" value="true" />
+    <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
+    <option name="useRustfmt" value="true" />
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="01377ebb-e361-4782-8382-eca9171c4216" name="Default Changelist" comment="" />
+      <created>1624320517327</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1624320517327</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
+  </component>
+</project>
