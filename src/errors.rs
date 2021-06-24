@@ -121,8 +121,7 @@ pub fn print_error_snippet(line_num: usize, col: usize, len: usize, src: &str) {
    // +2 for one extra space at the front and one at the back
    let whitespace_pad_size = " ".repeat(front_pad + 2);
 
-   // Compute the line colum of the error with
-   // timed whitespaces from the source line.
+   // Compute the column of the error with trimmed whitespaces from the source line.
    let mut removed_whitespace = 0;
    for c in src.chars() {
       if c == ' ' {

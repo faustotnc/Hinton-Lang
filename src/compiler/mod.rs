@@ -1,13 +1,12 @@
-use self::symbols::{Symbol, SymbolTable, SymbolType};
-use crate::{
-   ast::*,
-   bytecode::{self, Chunk, OpCode},
-   errors::CompilerErrorType,
-   errors::ErrorReport,
-   lexer::tokens::Token,
-   objects::{FuncObject, Object},
-};
-use std::{convert::TryFrom, path::PathBuf, str, vec};
+use crate::ast::{ASTNode, ModuleNode};
+use crate::bytecode;
+use crate::bytecode::{Chunk, OpCode};
+use crate::compiler::symbols::{Symbol, SymbolTable, SymbolType};
+use crate::errors::{CompilerErrorType, ErrorReport};
+use crate::lexer::tokens::Token;
+use crate::objects::{FuncObject, Object};
+use std::convert::TryFrom;
+use std::path::PathBuf;
 
 // Submodules
 mod expressions;
@@ -159,7 +158,7 @@ impl Compiler {
       _self.compile_node(&program);
       _self.emit_op_code(bytecode::OpCode::EndVirtualMachine, (0, 0));
 
-      // Print the bytecode for the main function when the appropriate flag is set.
+      // Print the bytecode for the main function when the appropriate flag is present.
       #[cfg(feature = "show_bytecode")]
       _self.print_pretty_bytecode();
       #[cfg(feature = "show_raw_bytecode")]
@@ -222,12 +221,12 @@ impl Compiler {
       false
    }
 
-   /// Gets an immutable reference to the function scope being compiled.
+   /// Gets an immutable reference to the current function scope.
    fn current_function_scope(&self) -> &FunctionScope {
       self.functions.last().unwrap()
    }
 
-   /// Gets a mutable reference to the function scope being compiled.
+   /// Gets a mutable reference to the current function scope.
    fn current_func_scope_mut(&mut self) -> &mut FunctionScope {
       self.functions.last_mut().unwrap()
    }
@@ -334,7 +333,7 @@ impl Compiler {
    /// should be used by the call to the `patch_jump(...)` function to patch the correct jump
    /// instruction's offset.
    fn emit_jump(&mut self, instruction: bytecode::OpCode, token: &Token) -> usize {
-      self.emit_op_code_with_short(instruction, 0xffff, (token.line_num, token.column_num));
+      self.emit_op_code_with_short(instruction, 0xffff, (token.line_num, token.column_start));
       return self.current_chunk_mut().len() - 2;
    }
 
@@ -369,7 +368,7 @@ impl Compiler {
    /// - `token`: The token associated with this loop instruction.
    fn emit_loop(&mut self, loop_start: usize, token: &Token) {
       let offset = self.current_chunk_mut().len() - loop_start;
-      let line_info = (token.line_num, token.column_num);
+      let line_info = (token.line_num, token.column_start);
 
       if offset < (u8::MAX - 2) as usize {
          self.emit_op_code(bytecode::OpCode::LoopJump, line_info);
@@ -391,7 +390,7 @@ impl Compiler {
    /// Adds an object to the pool and (optionally) emits a `LoadConst` or `LoadConstLong` instruction.
    ///
    /// # Arguments
-   /// - `obj`: The literal object being added to the pool.
+   /// - `obj`: The literal object to be added to the pool.
    /// - `token`: The object's original token.
    /// - `load`: Whether we should also emit a `LoadConst` or `LoadConstLong` instruction or not.
    ///
@@ -399,7 +398,7 @@ impl Compiler {
    /// `Option<u16>`: The position of this object in the pool. Returns `None` if the pool is fool.
    pub fn add_literal_to_pool(&mut self, obj: Object, token: &Token, load: bool) -> Option<u16> {
       let constant_pos = self.current_chunk_mut().add_constant(obj);
-      let opr_pos = (token.line_num, token.column_num);
+      let opr_pos = (token.line_num, token.column_start);
 
       match constant_pos {
          Ok(idx) => {
@@ -431,7 +430,7 @@ impl Compiler {
    ///
    /// # Parameters
    /// - `token`: The token that caused the error.
-   /// - `err_type`: The type of error being emitted.
+   /// - `err_type`: The type of error to be emitted.
    /// - `message`: The error message to display.
    fn error_at_token(&mut self, token: &Token, err_type: CompilerErrorType, message: &str) {
       let err_name = match err_type {
@@ -444,12 +443,12 @@ impl Compiler {
 
       let msg = format!(
          "\x1b[31;1m{}\x1b[0m\x1b[1m at [{}:{}]: {}\x1b[0m",
-         err_name, token.line_num, token.column_num, message
+         err_name, token.line_num, token.column_start, message
       );
 
       self.errors.push(ErrorReport {
          line: token.line_num,
-         column: token.column_num,
+         column: token.column_start,
          lexeme_len: token.lexeme.len(),
          message: msg,
       });

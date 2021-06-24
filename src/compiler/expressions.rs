@@ -1,11 +1,16 @@
-use super::{Compiler, CompilerErrorType};
-use crate::{ast::*, bytecode::OpCode, compiler::symbols::SL, lexer::tokens::Token, objects::Object};
+use crate::ast::*;
+use crate::bytecode::OpCode;
+use crate::compiler::symbols::SL;
+use crate::compiler::Compiler;
+use crate::errors::CompilerErrorType;
+use crate::lexer::tokens::Token;
+use crate::objects::Object;
 
 impl Compiler {
    /// Compiles a literal expression.
    pub(super) fn compile_literal_expr(&mut self, expr: &LiteralExprNode) {
       let obj = expr.value.clone();
-      let opr_pos = (expr.token.line_num, expr.token.column_num);
+      let opr_pos = (expr.token.line_num, expr.token.column_start);
 
       match obj {
          Object::Bool(x) if x => self.emit_op_code(OpCode::LoadImmTrue, opr_pos),
@@ -51,8 +56,8 @@ impl Compiler {
 
    /// Compiles a binary expression.
    pub(super) fn compile_binary_expr(&mut self, expr: &BinaryExprNode) {
-      // Because logic 'OR' and logic 'AND' expressions are short-circuit
-      // expressions, they are compiled by a separate function.
+      // Because logic 'OR' and logic 'AND' expressions are short-circuited,
+      // they are compiled by a separate function.
       match expr.opr_type {
          BinaryExprType::LogicAND | BinaryExprType::LogicOR => {
             return self.compile_logic_and_or_expr(expr);
@@ -88,7 +93,10 @@ impl Compiler {
          BinaryExprType::Range => OpCode::MakeRange,
       };
 
-      self.emit_op_code(expr_op_code, (expr.opr_token.line_num, expr.opr_token.column_num));
+      self.emit_op_code(
+         expr_op_code,
+         (expr.opr_token.line_num, expr.opr_token.column_start),
+      );
    }
 
    /// Compiles a ternary conditional expression.
@@ -128,8 +136,9 @@ impl Compiler {
 
    /// Compiles an identifier expression.
    pub(super) fn compile_identifier_expr(&mut self, expr: &IdentifierExprNode) {
-      let res = self.resolve_symbol(&expr.token, false);
-      self.named_variable(&res, &expr.token, false);
+      if let Ok(res) = self.resolve_symbol(&expr.token, false) {
+         self.named_variable(&res, &expr.token, false);
+      }
    }
 
    /// Emits the appropriate opcode to either get or set a local or global variable.
@@ -139,7 +148,7 @@ impl Compiler {
    /// - `token`: A reference to the token associated with this symbol.
    /// - `to_set`: Whether to emit reassignment instructions or not.
    fn named_variable(&mut self, symbol_loc: &SL, token: &Token, to_set: bool) {
-      let pos = (token.line_num, token.column_num);
+      let pos = (token.line_num, token.column_start);
 
       let op_name;
       let op_name_long;
@@ -179,6 +188,8 @@ impl Compiler {
                op_name_long = OpCode::GetUpValLong;
             }
          }
+         // Either there was an error with the resolution, or the symbol is for a native
+         // function, so exit this here.
          _ => return,
       }
 
@@ -189,15 +200,40 @@ impl Compiler {
       }
    }
 
+   /// Emits the appropriate instruction for a compound reassignment expression.
+   ///
+   /// # Parameters
+   /// - `t`: The compound reassignment type
+   /// - `line_info`: The source line info (line, column) of the reassignment expression.
+   fn emit_compound_reassignment_opr(&mut self, t: &ReassignmentType, line_info: (usize, usize)) {
+      match t {
+         ReassignmentType::Plus => self.emit_op_code(OpCode::Add, line_info),
+         ReassignmentType::Minus => self.emit_op_code(OpCode::Subtract, line_info),
+         ReassignmentType::Div => self.emit_op_code(OpCode::Divide, line_info),
+         ReassignmentType::Mul => self.emit_op_code(OpCode::Multiply, line_info),
+         ReassignmentType::Expo => self.emit_op_code(OpCode::Expo, line_info),
+         ReassignmentType::Mod => self.emit_op_code(OpCode::Modulus, line_info),
+         ReassignmentType::ShiftL => self.emit_op_code(OpCode::BitwiseShiftLeft, line_info),
+         ReassignmentType::ShiftR => self.emit_op_code(OpCode::BitwiseShiftRight, line_info),
+         ReassignmentType::BitAnd => self.emit_op_code(OpCode::BitwiseAnd, line_info),
+         ReassignmentType::Xor => self.emit_op_code(OpCode::BitwiseXor, line_info),
+         ReassignmentType::BitOr => self.emit_op_code(OpCode::BitwiseOr, line_info),
+         ReassignmentType::None => {}
+      };
+   }
+
    /// Compiles a variable reassignment expression.
    pub(super) fn compile_var_reassignment_expr(&mut self, expr: &VarReassignmentExprNode) {
-      let line_info = (expr.target.line_num, expr.target.column_num);
+      let line_info = (expr.target.line_num, expr.target.column_start);
 
       let res = match self.resolve_symbol(&expr.target, true) {
-         SL::Global(s, p) => SL::Global(s, p),
-         SL::Local(s, p) => SL::Local(s, p),
-         SL::UpValue(u, p) => SL::UpValue(u, p),
-         _ => return,
+         Ok(symbol) => match symbol {
+            SL::Global(s, p) => SL::Global(s, p),
+            SL::Local(s, p) => SL::Local(s, p),
+            SL::UpValue(u, p) => SL::UpValue(u, p),
+            _ => return,
+         },
+         Err(()) => return,
       };
 
       if let ReassignmentType::None = expr.opr_type {
@@ -212,51 +248,19 @@ impl Compiler {
          self.compile_node(&expr.value);
 
          // Then compute the operation of the two operands.
-         match expr.opr_type {
-            ReassignmentType::Plus => self.emit_op_code(OpCode::Add, line_info),
-            ReassignmentType::Minus => self.emit_op_code(OpCode::Subtract, line_info),
-            ReassignmentType::Div => self.emit_op_code(OpCode::Divide, line_info),
-            ReassignmentType::Mul => self.emit_op_code(OpCode::Multiply, line_info),
-            ReassignmentType::Expo => self.emit_op_code(OpCode::Expo, line_info),
-            ReassignmentType::Mod => self.emit_op_code(OpCode::Modulus, line_info),
-            ReassignmentType::ShiftL => self.emit_op_code(OpCode::BitwiseShiftLeft, line_info),
-            ReassignmentType::ShiftR => self.emit_op_code(OpCode::BitwiseShiftRight, line_info),
-            ReassignmentType::BitAnd => self.emit_op_code(OpCode::BitwiseAnd, line_info),
-            ReassignmentType::Xor => self.emit_op_code(OpCode::BitwiseXor, line_info),
-            ReassignmentType::BitOr => self.emit_op_code(OpCode::BitwiseOr, line_info),
-            ReassignmentType::None => {}
-         };
+         self.emit_compound_reassignment_opr(&expr.opr_type, line_info);
       }
 
       // Sets the new value (which will be on top of the stack)
       self.named_variable(&res, &expr.target, true);
    }
 
-   /// Compiles an object property access expression.
-   pub(super) fn compile_object_getter_expr(&mut self, expr: &ObjectGetExprNode) {
-      self.compile_node(&expr.target);
-
-      let prop_name = Object::String(expr.getter.lexeme.clone());
-      let prop_line_info = (expr.getter.line_num, expr.getter.column_num);
-
-      // TODO: Should objects be frozen by default?
-      // That is, Should we statically check that a property exists inside an object and prevent
-      // adding/removing  properties at runtime?
-      if let Some(pos) = self.add_literal_to_pool(prop_name, &expr.getter, false) {
-         if pos < 256 {
-            self.emit_op_code_with_byte(OpCode::GetProp, pos as u8, prop_line_info);
-         } else {
-            self.emit_op_code_with_short(OpCode::GetPropLong, pos, prop_line_info);
-         }
-      }
-   }
-
-   /// Compiles an object property reassignment expression.
+   /// Compiles a property-reassignment expression.
    pub(super) fn compile_object_setter_expr(&mut self, expr: &ObjectSetExprNode) {
       self.compile_node(&expr.target);
 
       let prop_name = Object::String(expr.setter.lexeme.clone());
-      let prop_line_info = (expr.setter.line_num, expr.setter.column_num);
+      let prop_line_info = (expr.setter.line_num, expr.setter.column_start);
 
       // TODO: Should objects be frozen by default?
       // That is, Should we statically check that a property exists inside an object and prevent
@@ -277,20 +281,7 @@ impl Compiler {
             self.compile_node(&expr.value);
 
             // Then compute the operation of the two operands.
-            match expr.opr_type {
-               ReassignmentType::Plus => self.emit_op_code(OpCode::Add, prop_line_info),
-               ReassignmentType::Minus => self.emit_op_code(OpCode::Subtract, prop_line_info),
-               ReassignmentType::Div => self.emit_op_code(OpCode::Divide, prop_line_info),
-               ReassignmentType::Mul => self.emit_op_code(OpCode::Multiply, prop_line_info),
-               ReassignmentType::Expo => self.emit_op_code(OpCode::Expo, prop_line_info),
-               ReassignmentType::Mod => self.emit_op_code(OpCode::Modulus, prop_line_info),
-               ReassignmentType::ShiftL => self.emit_op_code(OpCode::BitwiseShiftLeft, prop_line_info),
-               ReassignmentType::ShiftR => self.emit_op_code(OpCode::BitwiseShiftRight, prop_line_info),
-               ReassignmentType::BitAnd => self.emit_op_code(OpCode::BitwiseAnd, prop_line_info),
-               ReassignmentType::Xor => self.emit_op_code(OpCode::BitwiseXor, prop_line_info),
-               ReassignmentType::BitOr => self.emit_op_code(OpCode::BitwiseOr, prop_line_info),
-               ReassignmentType::None => {}
-            };
+            self.emit_compound_reassignment_opr(&expr.opr_type, prop_line_info);
          }
 
          if pos < 256 {
@@ -301,10 +292,29 @@ impl Compiler {
       }
    }
 
+   /// Compiles an object property access expression.
+   pub(super) fn compile_object_getter_expr(&mut self, expr: &ObjectGetExprNode) {
+      self.compile_node(&expr.target);
+
+      let prop_name = Object::String(expr.getter.lexeme.clone());
+      let prop_line_info = (expr.getter.line_num, expr.getter.column_start);
+
+      // TODO: Should objects be frozen by default?
+      // That is, Should we statically check that a property exists inside an object and prevent
+      // adding/removing  properties at runtime?
+      if let Some(pos) = self.add_literal_to_pool(prop_name, &expr.getter, false) {
+         if pos < 256 {
+            self.emit_op_code_with_byte(OpCode::GetProp, pos as u8, prop_line_info);
+         } else {
+            self.emit_op_code_with_short(OpCode::GetPropLong, pos, prop_line_info);
+         }
+      }
+   }
+
    /// Compiles an array literal expression.
    pub(super) fn compile_array_expr(&mut self, expr: &ArrayExprNode) {
       if expr.values.len() <= (u16::MAX as usize) {
-         let line_info = (expr.token.line_num, expr.token.column_num);
+         let line_info = (expr.token.line_num, expr.token.column_start);
 
          // We reverse the list here because at runtime, we pop each value of the stack in the
          // opposite order (because it *is* a stack). Instead of performing that operation during
@@ -330,7 +340,7 @@ impl Compiler {
    /// Compiles a tuple literal expression.
    pub(super) fn compile_tuple_expr(&mut self, expr: &TupleExprNode) {
       if expr.values.len() <= (u16::MAX as usize) {
-         let line_info = (expr.token.line_num, expr.token.column_num);
+         let line_info = (expr.token.line_num, expr.token.column_start);
 
          // We reverse the list here because at runtime, we pop each value of the stack in the
          // opposite order (because it *is* a stack). Instead of performing that operation during
@@ -358,7 +368,7 @@ impl Compiler {
    /// Compiles a dictionary literal expression.
    pub(super) fn compile_dictionary(&mut self, expr: &DictionaryExprNode) {
       let pair_count = expr.keys.len();
-      let pos = (expr.token.line_num, expr.token.column_num);
+      let pos = (expr.token.line_num, expr.token.column_start);
 
       // Prevent having too many key-value pairs for the dictionary.
       if pair_count > u16::MAX as usize {

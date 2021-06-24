@@ -82,7 +82,7 @@ impl<'a> Parser {
                   target: id.token,
                   opr_type,
                   value: Box::new(rhs),
-                  pos: (opr.line_num, opr.column_num),
+                  pos: (opr.line_num, opr.column_start),
                })),
 
                // Object setter `object.property = value`.
@@ -515,7 +515,7 @@ impl<'a> Parser {
                Some(e) => Box::new(e),
                None => return None, // Could not create rhs of expression
             },
-            pos: (opr.line_num, opr.column_num),
+            pos: (opr.line_num, opr.column_start),
             opr_type,
          }))
       } else {
@@ -840,7 +840,7 @@ impl<'a> Parser {
          None => return None,
       };
 
-      let pos = (self.previous.line_num, self.previous.column_num);
+      let pos = (self.previous.line_num, self.previous.column_start);
 
       let expr = Some(ArrayIndexing(ArrayIndexingExprNode {
          target: Box::new(expr),
@@ -862,7 +862,7 @@ impl<'a> Parser {
          None => return None,
       };
 
-      let pos = (self.previous.line_num, self.previous.column_num);
+      let pos = (self.previous.line_num, self.previous.column_start);
       let mut args: Vec<Argument> = vec![];
 
       if !self.matches(&R_PARENTHESIS) {

@@ -2,7 +2,7 @@ use crate::lexer::tokens::Token;
 use crate::lexer::tokens::TokenType::*;
 use crate::lexer::Lexer;
 
-impl<'a> Lexer {
+impl Lexer {
    /// Scans the next token in the source file.
    pub fn next_token(&mut self) -> Token {
       self.skip_whitespace();

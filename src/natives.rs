@@ -186,7 +186,7 @@ pub fn get_next_in_iter(o: &Rc<RefCell<IterObject>>) -> Result<Object, RuntimeRe
    // Since we are passing an integer into the `Object.get(...)` method,
    // the only error that can occur is an `IndexOutOfBounds` error, which
    // in terms of iterators means there are no more items left to iterate.
-   let obj = match iter.iter.get_at_index(&current_index) {
+   let obj = match iter.iter.subscript(&current_index) {
       Ok(o) => o,
       Err(_) => {
          return Err(RuntimeResult::Error {

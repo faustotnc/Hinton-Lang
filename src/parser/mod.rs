@@ -38,13 +38,15 @@ impl Parser {
          lexer: Lexer::lex(src),
          previous: Token {
             line_num: 0,
-            column_num: 0,
+            column_start: 0,
+            column_end: 0,
             token_type: __INIT_PARSER__,
             lexeme: String::from(""),
          },
          current: Token {
             line_num: 0,
-            column_num: 0,
+            column_start: 0,
+            column_end: 0,
             token_type: __INIT_PARSER__,
             lexeme: String::from(""),
          },
@@ -177,20 +179,20 @@ impl Parser {
    /// - `message`: The error message to display.
    fn error_at_token(&mut self, tok: &Token, message: &str) {
       if self.is_in_panic {
-         return ();
+         return;
       }
       self.is_in_panic = true;
 
       // Construct the error message.
       let msg = format!(
          "\x1b[31;1mSyntaxError\x1b[0m\x1b[1m at [{}:{}]: {}\x1b[0m",
-         tok.line_num, tok.column_num, message
+         tok.line_num, tok.column_start, message
       );
 
       // Push the error to the list
       self.errors.push(ErrorReport {
          line: tok.line_num,
-         column: tok.column_num,
+         column: tok.column_start,
          lexeme_len: tok.lexeme.len(),
          message: msg,
       });

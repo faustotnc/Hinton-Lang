@@ -3,7 +3,7 @@ use crate::objects::{Object, RangeObject};
 
 impl Object {
    /// Defines the indexing operation of Hinton objects.
-   pub fn get_at_index(&self, index: &Object) -> Result<Object, ObjectOprErrType> {
+   pub fn subscript(&self, index: &Object) -> Result<Object, ObjectOprErrType> {
       match self {
          Object::Array(arr) => index_array(&arr.borrow(), index),
          Object::Tuple(tup) => index_tuple(&tup, index),

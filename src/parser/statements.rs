@@ -73,7 +73,7 @@ impl Parser {
             Some(t) => Box::new(t),
             None => return None, // Could not create expression to print
          },
-         pos: (opr.line_num, opr.column_num),
+         pos: (opr.line_num, opr.column_start),
       }));
    }
 

@@ -3,8 +3,10 @@
 pub struct Token {
    /// The token's line number
    pub line_num: usize,
-   /// The token's column number
-   pub column_num: usize,
+   /// The token's column start
+   pub column_start: usize,
+   /// The token's column end
+   pub column_end: usize,
    /// The token's type
    pub token_type: TokenType,
    /// The token's lexeme

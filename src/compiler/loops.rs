@@ -22,8 +22,6 @@ impl Compiler {
       self.current_func_scope_mut().loops.push(LoopScope {
          position: loop_start,
          loop_type: LoopType::While,
-         // +1 because we don't start the actual scope until the loop
-         // body is being compiled, which occurs later in this function.
          scope_depth: depth,
       });
 
@@ -50,7 +48,7 @@ impl Compiler {
 
    /// Compiles a `for` statement.
    pub(super) fn compile_for_stmt(&mut self, stmt: &ForStmtNode) {
-      let loop_line_info = (stmt.token.line_num, stmt.token.column_num);
+      let loop_line_info = (stmt.token.line_num, stmt.token.column_start);
 
       // Create the iterator at runtime
       self.compile_node(&stmt.iterator);
@@ -63,9 +61,9 @@ impl Compiler {
       // Increment the scope for the loop's iterator
       self.current_func_scope_mut().scope_depth += 1;
 
-      // Emits a placeholder symbol for the loop's iterator, which lives on
-      // the stack until the end of the loop. The programmer will never be
-      // able to access this "variable" because of the format of its name.
+      // Emits a placeholder symbol for the loop's iterator, which lives on the stack
+      // until the end of the loop. The programmer will never be able to access this
+      // symbol's value directly because of the format of its name.
       match self.emit_symbol(
          &format!("<for-loop at #{}>", loop_start),
          &stmt.token,
@@ -76,7 +74,7 @@ impl Compiler {
       }
 
       // Increment the scope for the loop's body.
-      // This scope is removed by the call to `self.end_scope(...)` method below.
+      // The call to `self.end_scope(...)` below removes this scope.
       self.current_func_scope_mut().scope_depth += 1;
 
       // Starts this loop's break scope
@@ -84,8 +82,6 @@ impl Compiler {
       self.current_func_scope_mut().loops.push(LoopScope {
          position: loop_start,
          loop_type: LoopType::ForIn,
-         // +1 because we don't start the actual scope until the loop
-         // body is being compiled, which occurs later in this function.
          scope_depth: depth,
       });
 

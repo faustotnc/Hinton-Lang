@@ -13,24 +13,24 @@ impl Compiler {
    /// - `reassign`: Whether we are resolving the symbol for the purpose of reassignment or not.
    ///
    /// # Returns
-   /// - `SL`: The location (if found) and resolution type of the symbol.
-   pub(super) fn resolve_symbol(&mut self, token: &Token, reassign: bool) -> SL {
+   /// - `Result<SL>`: The location (if found) and resolution type of the symbol.
+   pub(super) fn resolve_symbol(&mut self, token: &Token, reassign: bool) -> Result<SL, ()> {
       // Look for the symbol in the local scope of the current function
-      if let Ok(s) = self.resolve_local(self.functions.len() - 1, token, reassign, None) {
-         return s;
+      if let Some(s) = self.resolve_local(self.functions.len() - 1, token, reassign, None) {
+         return Ok(s);
       }
 
       // If we are in a function within a block, then we also look for symbols
       // in the scope of the parent function to create upValues & closures.
       if self.functions.len() > 1 {
-         if let Ok(s) = self.resolve_up_value(token, reassign, self.functions.len() - 2) {
-            return s;
+         if let Some(s) = self.resolve_up_value(token, reassign, self.functions.len() - 2) {
+            return Ok(s);
          }
       }
 
       // Looks for the symbol in the global scope of the current script
-      if let Ok(s) = self.resolve_global(token, reassign) {
-         return s;
+      if let Some(s) = self.resolve_global(token, reassign) {
+         return Ok(s);
       }
 
       // Look for the identifier in the natives
@@ -45,155 +45,129 @@ impl Compiler {
             self.emit_op_code_with_byte(
                OpCode::LoadNative,
                index as u8,
-               (token.line_num, token.column_num),
+               (token.line_num, token.column_start),
             );
          }
 
-         return SL::Native;
+         return Ok(SL::Native);
       }
 
       // The symbol doesn't exist
-      self.error_at_token(
-         token,
-         CompilerErrorType::Reference,
-         &format!("Use of undeclared identifier '{}'.", token.lexeme),
-      );
-
-      SL::None
+      let error_msg = &format!("Use of undeclared identifier '{}'.", token.lexeme);
+      self.error_at_token(token, CompilerErrorType::Reference, error_msg);
+      Err(())
    }
 
    /// Looks for a symbol with the given token name in the local scope of the provided function index.
    ///
    /// # Parameters
+   /// - `func_idx`: The index of the function in the compiler's function list where the variable
+   ///    will be looked up.
    /// - `token`: A reference to the token related to the symbol.
    /// - `for_reassign`: Whether we are resolving the symbol for a reassignment or not.
-   /// - `func_idx`: The index of the function in the compiler's function list where the variable
-   /// will be looked up.
    /// - `is_captured`: Whether this local variable has been captured by a closure or not. `None`
-   /// if it is unknown whether the variable is captured or not.
+   ///    if it is unknown whether the variable is captured or not.
    ///
    /// # Returns
-   /// - `Result<SymbolLoc, ()>`: The location (if found) and resolution type of the symbol.
+   /// - `Option<SL>`: The location (if found) and resolution type of the symbol.
    fn resolve_local(
       &mut self,
       func_idx: usize,
       token: &Token,
-      for_reassign: bool,
+      for_reassignment: bool,
       is_captured: Option<bool>,
-   ) -> Result<SL, ()> {
+   ) -> Option<SL> {
       let func = &mut self.functions[func_idx];
 
       if let Some(resolution) = func.s_table.resolve(&token.lexeme, true, is_captured) {
-         if !resolution.0.is_initialized {
-            let sym_type = match resolution.0.s_type {
-               SymbolType::Variable => "variable",
-               SymbolType::Constant => "constant",
-               SymbolType::Function => "function",
-               _ => unreachable!("Symbol should have been initialized by now."),
-            };
-
-            self.error_at_token(
-               &token,
-               CompilerErrorType::Reference,
-               &format!(
-                  "Cannot reference {} '{}' before it has been initialized.",
-                  sym_type, token.lexeme
-               ),
-            );
-
-            // Return None here because a symbol should not be referenced
-            // until it has been initialized.
-            return Ok(SL::None);
+         // Verify that the symbol has been initialized before using it.
+         if let Err(_) = self.check_is_initialized(&resolution, token) {
+            return Some(SL::Error);
          }
 
-         if for_reassign {
-            let sym_type = match &resolution.0.s_type {
-               SymbolType::Constant => "Constants",
-               SymbolType::Function => "Functions",
-               SymbolType::Class => "Classes",
-               // Only variables & parameters are re-assignable
-               SymbolType::Variable | SymbolType::Parameter => {
-                  return Ok(SL::Local(resolution.0, resolution.1))
-               }
-            };
-
-            self.error_at_token(
-               token,
-               CompilerErrorType::Reassignment,
-               &format!("{} are immutable.", sym_type),
-            );
-
-            return Ok(SL::None);
-         }
-
-         return Ok(SL::Local(resolution.0, resolution.1));
+         // If the resolution is for the purpose of reassignment, check that the symbol can be
+         // reassigned before returning its location.
+         return if let Ok(_) = self.check_reassignment(&resolution, token, for_reassignment) {
+            Some(SL::Local(resolution.0, resolution.1))
+         } else {
+            Some(SL::Error)
+         };
       }
 
-      Err(())
+      None
    }
 
    /// Looks for a symbol with the given token name in the global scope.
    ///
    /// # Parameters
    /// - `token`: A reference to the token (symbol name) related to the symbol.
-   /// - `reassign`: Whether we are resolving the symbol for the purpose of reassignment or not.
+   /// - `for_reassignment`: Whether we are resolving the symbol for the purpose of
+   /// reassignment or not.
    ///
    /// # Returns
-   /// - `Result<SymbolLoc, ()>`: The location (if found) and resolution type of the symbol.
-   fn resolve_global(&mut self, token: &Token, reassign: bool) -> Result<SL, ()> {
-      if let Some(symbol_info) = self.globals.resolve(&token.lexeme, true, None) {
-         if !symbol_info.0.is_initialized {
-            let sym_type = match symbol_info.0.s_type {
-               SymbolType::Variable => "variable",
-               SymbolType::Constant => "constant",
-               SymbolType::Function => "function",
-               _ => unreachable!("Symbol should have been initialized by now."),
-            };
-
-            self.error_at_token(
-               &token,
-               CompilerErrorType::Reference,
-               &format!(
-                  "Cannot reference {} '{}' before it has been initialized.",
-                  sym_type, token.lexeme
-               ),
-            );
-
-            // Return None here because a symbol should not be referenced
-            // until it has been initialized.
-            return Ok(SL::None);
+   /// - `Option<SL>`: The location (if found) and resolution type of the symbol.
+   fn resolve_global(&mut self, token: &Token, for_reassignment: bool) -> Option<SL> {
+      if let Some(resolution) = self.globals.resolve(&token.lexeme, true, None) {
+         if let Err(_) = self.check_is_initialized(&resolution, token) {
+            return Some(SL::Error);
          }
 
-         if reassign {
-            let sym_type = match &symbol_info.0.s_type {
-               SymbolType::Constant => "Constants",
-               SymbolType::Function => "Functions",
-               SymbolType::Class => "Classes",
-               // Only variables & parameters are re-assignable
-               SymbolType::Variable | SymbolType::Parameter => {
-                  return match self.add_literal_to_pool(Object::String(token.lexeme.clone()), &token, false) {
-                     Some(idx) => Ok(SL::Global(symbol_info.0, idx as usize)),
-                     None => Ok(SL::None),
-                  }
-               }
-            };
-
-            self.error_at_token(
-               token,
-               CompilerErrorType::Reassignment,
-               &format!("{} are immutable.", sym_type),
-            );
-
-            return Ok(SL::None);
+         // If the resolution is for the purpose of reassignment, check that the symbol can be
+         // reassigned before returning its location.
+         if let Ok(_) = self.check_reassignment(&resolution, token, for_reassignment) {
+            let name = Object::String(token.lexeme.clone());
+            if let Some(idx) = self.add_literal_to_pool(name, &token, false) {
+               return Some(SL::Global(resolution.0, idx as usize));
+            }
          }
 
-         return match self.add_literal_to_pool(Object::String(token.lexeme.clone()), &token, false) {
-            Some(idx) => Ok(SL::Global(symbol_info.0, idx as usize)),
-            None => Ok(SL::None),
-         };
+         return Some(SL::Error);
       }
 
+      None
+   }
+
+   /// Checks that the resolved symbol has been initialized before usage.
+   fn check_is_initialized(&mut self, s: &(Symbol, usize), token: &Token) -> Result<(), ()> {
+      if s.0.is_initialized {
+         return Ok(());
+      }
+
+      let sym_type = match s.0.s_type {
+         SymbolType::Variable => "variable",
+         SymbolType::Constant => "constant",
+         SymbolType::Function => "function",
+         _ => unreachable!("Symbol should have been initialized by now."),
+      };
+
+      let error_msg = &format!(
+         "Cannot reference {} '{}' before it has been initialized.",
+         sym_type, token.lexeme
+      );
+
+      self.error_at_token(&token, CompilerErrorType::Reference, error_msg);
       Err(())
+   }
+
+   /// If the symbol has been resolved for the purpose of reassignment, this function
+   /// makes sure that the symbol is reassignable.
+   fn check_reassignment(&mut self, s: &(Symbol, usize), t: &Token, r: bool) -> Result<(), ()> {
+      // If the symbol has not been resolved for reassignment in the first place,
+      // simply return OK out of the function.
+      if !r {
+         return Ok(());
+      }
+
+      let message = match s.0.s_type {
+         SymbolType::Constant => "Constants are immutable.",
+         SymbolType::Function => "Functions are immutable.",
+         SymbolType::Class => "Classes are immutable.",
+         // Only variables & parameters are re-assignable
+         SymbolType::Variable | SymbolType::Parameter => return Ok(()),
+      };
+
+      self.error_at_token(t, CompilerErrorType::Reassignment, message);
+      return Err(());
    }
 
    /// Looks for a symbol with the given token name in the provided function scope index.
@@ -207,10 +181,10 @@ impl Compiler {
    /// - `func_idx`: The index of the function scope to start looking for the symbol.
    ///
    /// # Returns
-   /// - `Result<SymbolLoc, ()>`: The location (if found) and resolution type of the symbol.
-   fn resolve_up_value(&mut self, token: &Token, reassign: bool, func_idx: usize) -> Result<SL, ()> {
+   /// - `Option<SL>`: The location (if found) and resolution type of the symbol.
+   fn resolve_up_value(&mut self, token: &Token, reassign: bool, func_idx: usize) -> Option<SL> {
       if func_idx == 0 && self.functions[0].scope_depth == 0 {
-         return Err(());
+         return None;
       }
 
       // Look for the symbol in the local scope of the current function.
@@ -220,7 +194,7 @@ impl Compiler {
       // for the `self.functions.len() - 2` function scope. That is, the local scope of the parent
       // function of the parent function. Look at the call to `self.resolve_up_value(...)` in
       // `self.resolve_symbol(...)` to understand this better.
-      if let Ok(s) = self.resolve_local(func_idx, token, reassign, Some(true)) {
+      if let Some(s) = self.resolve_local(func_idx, token, reassign, Some(true)) {
          return match s {
             SL::Local(s, p) => self.add_up_value(token, func_idx + 1, s, p, true),
             _ => unreachable!("SymbolLoc should have been a local symbol."),
@@ -229,7 +203,7 @@ impl Compiler {
 
       // Recursively look for the symbol in higher function scopes.
       if func_idx > 0 {
-         if let Ok(s) = self.resolve_up_value(token, reassign, func_idx - 1) {
+         if let Some(s) = self.resolve_up_value(token, reassign, func_idx - 1) {
             return match s {
                SL::UpValue(u, p) => self.add_up_value(token, func_idx + 1, u.symbol, p, false),
                _ => unreachable!("SymbolLoc should have been an up_value symbol."),
@@ -237,7 +211,7 @@ impl Compiler {
          }
       }
 
-      return Err(());
+      None
    }
 
    /// Adds an UpValue to the list of UpValues for the current function.
@@ -248,11 +222,11 @@ impl Compiler {
       symbol: Symbol,
       index: usize,
       is_local: bool,
-   ) -> Result<SL, ()> {
+   ) -> Option<SL> {
       // Prevent creating repeated up_values
       for (index, up_val) in self.functions[func_idx].up_values.iter().enumerate() {
          if up_val.index == index && up_val.is_local == is_local && up_val.symbol.name == symbol.name {
-            return Ok(SL::UpValue(up_val.clone(), index));
+            return Some(SL::UpValue(up_val.clone(), index));
          }
       }
 
@@ -262,7 +236,7 @@ impl Compiler {
             CompilerErrorType::MaxCapacity,
             "Too many closure variables in function.",
          );
-         return Err(());
+         return None;
       }
 
       let up_value = UpValue {
@@ -274,7 +248,7 @@ impl Compiler {
       self.functions[func_idx].up_values.push(up_value.clone());
       self.functions[func_idx].function.up_val_count += 1;
 
-      return Ok(SL::UpValue(
+      return Some(SL::UpValue(
          up_value,
          self.functions[func_idx].up_values.len() - 1,
       ));

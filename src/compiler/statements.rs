@@ -16,19 +16,14 @@ impl Compiler {
 
    /// Compiles a variable declaration.
    pub(super) fn compile_variable_decl(&mut self, decl: &VariableDeclNode) {
-      // Declares the variables
       for id in decl.identifiers.iter() {
          if let Ok(symbol_pos) = self.declare_symbol(id, SymbolType::Variable) {
-            // Compiles the variable's value
             self.compile_node(&decl.value);
 
-            // If we are in the global scope, declarations are
-            // stored in the VM.globals hashmap
             if self.is_global_scope() {
                self.define_as_global(id);
                self.globals.mark_initialized(symbol_pos);
             } else {
-               // Marks the variables as initialized, a.k.a., defines the variables.
                self.current_func_scope_mut().s_table.mark_initialized(symbol_pos);
             }
          }
@@ -37,18 +32,11 @@ impl Compiler {
 
    /// Compiles a constant declaration.
    pub(super) fn compile_constant_decl(&mut self, decl: &ConstantDeclNode) {
-      // Declares the constant
-      if let Ok(symbol_pos) = self.declare_symbol(&decl.name, SymbolType::Constant) {
-         // Compiles the constant's value
+      if let Ok(_) = self.declare_symbol(&decl.name, SymbolType::Constant) {
          self.compile_node(&decl.value);
 
-         // If we are in the global scope, declarations are
-         // stored in the VM.globals hashmap
          if self.is_global_scope() {
             self.define_as_global(&decl.name);
-            self.globals.mark_initialized(symbol_pos);
-         } else {
-            self.current_func_scope_mut().s_table.mark_initialized(symbol_pos);
          }
       }
    }
@@ -56,7 +44,7 @@ impl Compiler {
    /// Defines a declaration as global by emitting a `DEFINE_GLOBAL` instructions.
    pub(super) fn define_as_global(&mut self, token: &Token) {
       if let Some(idx) = self.add_literal_to_pool(Object::String(token.lexeme.clone()), token, false) {
-         let pos = (token.line_num, token.column_num);
+         let pos = (token.line_num, token.column_start);
 
          if idx < 256 {
             self.emit_op_code_with_byte(OpCode::DefineGlobal, idx as u8, pos);
@@ -69,8 +57,8 @@ impl Compiler {
    /// Declares the symbol by adding it to the symbol table.
    ///
    /// # Parameters
-   /// - `token`: The token (symbol name) related to the symbol being declared.
-   /// - `symbol_type`: The type of symbol being declared.
+   /// - `token`: The token (symbol name) related to the symbol to be declared.
+   /// - `symbol_type`: The type of symbol to be declared.
    ///
    /// # Returns
    /// `Result<usize, ()>`: If the declaration was okay, returns the position of the
@@ -103,9 +91,9 @@ impl Compiler {
    /// or into the global symbol table for the compiler.
    ///
    /// # Parameters
-   /// - `name`: The symbol's name.
-   /// - `token`: The token related to the symbol being emitted.
-   /// - `symbol_type`: The type of symbol being emitted.
+   /// - `name`: The symbol's name.
+   /// - `token`: The token related to the symbol to be emitted.
+   /// - `symbol_type`: The type of symbol to be emitted.
    ///
    /// # Returns
    /// `Result<usize, ()>`: If the declaration was okay, returns the position of the symbol in the symbol table.
@@ -119,7 +107,7 @@ impl Compiler {
          },
          s_type: st,
          is_used: false,
-         line_info: (token.line_num, token.column_num),
+         line_info: (token.line_num, token.column_start),
          is_captured: false,
       };
 
@@ -131,7 +119,7 @@ impl Compiler {
             self.error_at_token(
                &token,
                CompilerErrorType::MaxCapacity,
-               "Too many variables in this scope.",
+               "Too many local variables in this block.",
             );
             return Err(());
          }
@@ -168,10 +156,10 @@ impl Compiler {
    /// provided popped-symbols vector.
    ///
    /// # Parameters
-   // * `symbols`: A popped symbols vector.
-   // * `token`: The token associated with the pop instructions.
+   /// * `symbols`: A vector of popped symbols.
+   /// * `token`: The token associated with the pop instructions.
    pub(super) fn emit_stack_pops(&mut self, symbols: Vec<bool>, token: &Token) {
-      let pos = (token.line_num, token.column_num);
+      let pos = (token.line_num, token.column_start);
 
       for is_closed in symbols {
          self.emit_op_code(
@@ -247,9 +235,9 @@ impl Compiler {
 
    /// Compiles a class declaration statement.
    pub(super) fn compile_class_declaration(&mut self, decl: &ClassDeclNode) {
-      if let Ok(symbol_pos) = self.declare_symbol(&decl.name, SymbolType::Class) {
+      if let Ok(_) = self.declare_symbol(&decl.name, SymbolType::Class) {
          let str_name = Object::String(decl.name.lexeme.clone());
-         let name_line_info = (decl.name.line_num, decl.name.column_num);
+         let name_line_info = (decl.name.line_num, decl.name.column_start);
 
          if let Some(name_pool_pos) = self.add_literal_to_pool(str_name, &decl.name, false) {
             if name_pool_pos < 256 {
@@ -258,11 +246,8 @@ impl Compiler {
                self.emit_op_code_with_short(OpCode::MakeClass, name_pool_pos, name_line_info)
             }
 
-            // If we are in the global scope, declarations are
-            // stored in the VM.globals hashmap
             if self.is_global_scope() {
                self.define_as_global(&decl.name);
-               self.globals.mark_initialized(symbol_pos);
             }
          }
       }

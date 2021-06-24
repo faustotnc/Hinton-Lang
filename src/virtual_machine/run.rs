@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-impl<'a> VirtualMachine {
+impl VirtualMachine {
    /// Executes the instructions in a chunk.
    pub(crate) fn run(&mut self) -> RuntimeResult {
       loop {
@@ -35,8 +35,8 @@ impl<'a> VirtualMachine {
             // Object makers
             OpCode::MakeArray | OpCode::MakeArrayLong => self.op_make_array(),
             OpCode::MakeClass | OpCode::MakeClassLong => self.op_make_class(),
-            OpCode::MakeClosure | OpCode::MakeClosureLarge => self.op_make_closure(),
-            OpCode::MakeClosureLong | OpCode::MakeClosureLongLarge => self.op_make_closure_long(),
+            OpCode::MakeClosure | OpCode::MakeClosureLong => self.op_make_closure(),
+            OpCode::MakeClosureLarge | OpCode::MakeClosureLongLarge => self.op_make_closure_large(),
             OpCode::MakeDict | OpCode::MakeDictLong => self.op_make_dictionary(),
             OpCode::MakeInstance => self.op_make_instance(),
             OpCode::MakeIter => self.op_make_iter(),
@@ -111,6 +111,7 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to end the virtual machine with an OK result.
    fn op_end_virtual_machine(&mut self) -> RuntimeResult {
       self.pop_stack(); // Remove the main function off the stack
       self.frames.pop();
@@ -118,6 +119,8 @@ impl<'a> VirtualMachine {
       return RuntimeResult::EndOK;
    }
 
+   /// Executes the instruction to pop the top of the stack, and jump forward by the given
+   /// offset if the popped value is falsey.
    fn op_pop_and_jump_if_false(&mut self) -> RuntimeResult {
       // The POP_JUMP_IF_FALSE instruction always has a short as its operand.
       let offset = self.get_next_short() as usize;
@@ -129,6 +132,8 @@ impl<'a> VirtualMachine {
       RuntimeResult::Continue
    }
 
+   /// Executes the instruction to jump forward by the given offset if the top of the stack is
+   /// falsey, or pop the top off the stack otherwise.
    fn op_jump_if_false_or_pop(&mut self) -> RuntimeResult {
       // The JUMP_IF_FALSE_OR_POP instruction always has a short as its operand.
       let offset = self.get_next_short() as usize;
@@ -142,6 +147,8 @@ impl<'a> VirtualMachine {
       RuntimeResult::Continue
    }
 
+   /// Executes the instruction to pop the top of the stack, and jump forward by the given
+   /// offset if the popped value is truthy.
    fn op_jump_if_true_or_pop(&mut self) -> RuntimeResult {
       // The JUMP_IF_TRUE_OR_POP instruction always has a short as its operand.
       let offset = self.get_next_short() as usize;
@@ -155,6 +162,7 @@ impl<'a> VirtualMachine {
       RuntimeResult::Continue
    }
 
+   /// Executes the instruction to jump forward by the given offset.
    fn op_jump_forward(&mut self) -> RuntimeResult {
       // The JUMP_FORWARD instruction always has a short as its operand.
       let offset = self.get_next_short() as usize;
@@ -162,12 +170,14 @@ impl<'a> VirtualMachine {
       RuntimeResult::Continue
    }
 
+   /// Executes the instruction to jump (loop) back by the given offset.
    fn op_loop_jump(&mut self) -> RuntimeResult {
       let offset = self.get_std_or_long_operand(OpCode::LoopJump);
       self.current_frame_mut().ip -= offset;
       RuntimeResult::Continue
    }
 
+   /// Executes the instruction to load a native function onto the stack.
    fn op_load_native(&mut self) -> RuntimeResult {
       let native = self.get_next_byte() as usize;
 
@@ -177,6 +187,7 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to call a function object.
    fn op_func_call(&mut self) -> RuntimeResult {
       // Functions can only have 255-MAX parameters
       let arg_count = self.get_next_byte();
@@ -188,6 +199,11 @@ impl<'a> VirtualMachine {
       self.call_object(maybe_function, arg_count)
    }
 
+   /// Executes the instruction to make a closure object from a function object.
+   /// This method only covers the `OP_MAKE_CLOSURE` and `OP_MAKE_CLOSURE_LONG` instructions
+   /// with a variable number of operands. The byte or short immediately following the
+   /// instruction encodes the position of the function object in the constant pool to be
+   /// converted into a closure. Each consecutive operand is two bytes long.
    fn op_make_closure(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::MakeClosure);
 
@@ -215,8 +231,13 @@ impl<'a> VirtualMachine {
       self.push_stack(Object::Closure(ClosureObject { function, up_values }))
    }
 
-   fn op_make_closure_long(&mut self) -> RuntimeResult {
-      let pos = self.get_std_or_long_operand(OpCode::MakeClosureLong);
+   /// Executes the instruction to make a closure object from a function object.
+   /// This method only covers the `OP_MAKE_CLOSURE_LARGE` and `OP_MAKE_CLOSURE_LONG_LARGE`
+   /// instructions with a variable number of operands. The byte or short immediately following
+   /// the instruction encodes the position of the function object in the constant pool to be
+   /// converted into a closure. Each consecutive operand is three bytes long.
+   fn op_make_closure_large(&mut self) -> RuntimeResult {
+      let pos = self.get_std_or_long_operand(OpCode::MakeClosureLarge);
 
       let function = match self.read_constant(pos).clone() {
          Object::Function(obj) => obj,
@@ -242,6 +263,7 @@ impl<'a> VirtualMachine {
       self.push_stack(Object::Closure(ClosureObject { function, up_values }))
    }
 
+   /// Executes the instruction to get an UpValue from the current call frame's closure.
    fn op_get_up_value(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::GetUpVal);
 
@@ -253,6 +275,7 @@ impl<'a> VirtualMachine {
       self.push_stack(val)
    }
 
+   /// Executes the instruction to modify an UpValue in the current call frame's closure.
    fn op_set_up_value(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::SetUpVal);
       let new_val = self.stack.last().unwrap().clone();
@@ -265,6 +288,8 @@ impl<'a> VirtualMachine {
       RuntimeResult::Continue
    }
 
+   /// Executes the instruction to lift the UpValue at the given index from the stack
+   /// and onto the heap (close it), without removing the original value from the stack.
    fn up_close_up_value(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::CloseUpVal);
 
@@ -279,6 +304,8 @@ impl<'a> VirtualMachine {
       RuntimeResult::Continue
    }
 
+   /// Executes the instruction to pop the last object of the stack and close the
+   /// open UpValue referring to it (if such UpValue exists).
    fn op_pop_stack_and_close_up_value(&mut self) -> RuntimeResult {
       let new_val = self.pop_stack();
 
@@ -292,6 +319,7 @@ impl<'a> VirtualMachine {
       RuntimeResult::Continue
    }
 
+   /// Executes the instruction to bind `N` number of default parameters to a function.
    fn op_bind_function_defaults(&mut self) -> RuntimeResult {
       // Functions can only have 255-MAX parameters
       let param_count = self.get_next_byte();
@@ -316,6 +344,7 @@ impl<'a> VirtualMachine {
       RuntimeResult::Continue
    }
 
+   /// Executes the instruction to return out of a function call.
    fn op_function_return(&mut self) -> RuntimeResult {
       let result = self.pop_stack();
       let locals_to_pop = self.stack.len() - self.current_frame().return_index;
@@ -330,6 +359,7 @@ impl<'a> VirtualMachine {
       self.push_stack(result)
    }
 
+   /// Executes the instruction to create a class object.
    fn op_make_class(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::MakeClass);
 
@@ -342,6 +372,7 @@ impl<'a> VirtualMachine {
       self.push_stack(new_class)
    }
 
+   /// Executes the instruction to create an instance from a class object.
    fn op_make_instance(&mut self) -> RuntimeResult {
       // Instances can only have 255-MAX arguments
       let arg_count = self.get_next_byte();
@@ -353,6 +384,7 @@ impl<'a> VirtualMachine {
       self.create_instance(maybe_instance, arg_count)
    }
 
+   /// Executes the instruction to get a property from an object.
    fn op_get_property(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::GetProp);
 
@@ -392,6 +424,7 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to modify a property in an object.
    fn op_set_property(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::SetProp);
 
@@ -411,6 +444,7 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to create a range object with the two objects on the TOS.
    fn op_make_range(&mut self) -> RuntimeResult {
       let right = self.pop_stack();
       let left = self.pop_stack();
@@ -431,6 +465,7 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to perform a unary operation with the object at the TOS.
    fn unary_operation(&mut self, opr: UnaryExprType) -> RuntimeResult {
       let val = self.pop_stack();
 
@@ -446,6 +481,7 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to perform a binary operation with the two objects at the TOS.
    fn binary_operation(&mut self, opr: BinaryExprType) -> RuntimeResult {
       let val2 = self.pop_stack();
       let val1 = self.pop_stack();
@@ -459,15 +495,15 @@ impl<'a> VirtualMachine {
          BinaryExprType::BitwiseXOR => val1 ^ val2,
          BinaryExprType::Division => val1 / val2,
          BinaryExprType::Expo => val1.pow(val2),
+         BinaryExprType::LogicEQ => Ok(Object::Bool(val1.equals(&val2))),
          BinaryExprType::LogicGreaterThan => val1.gt(val2),
          BinaryExprType::LogicGreaterThanEQ => val1.gteq(val2),
          BinaryExprType::LogicLessThan => val1.lt(val2),
          BinaryExprType::LogicLessThanEQ => val1.lteq(val2),
+         BinaryExprType::LogicNotEQ => Ok(Object::Bool(!val1.equals(&val2))),
          BinaryExprType::Minus => val1 - val2,
          BinaryExprType::Modulus => val1 % val2,
          BinaryExprType::Multiplication => val1 * val2,
-         BinaryExprType::LogicEQ => Ok(Object::Bool(val1.equals(&val2))),
-         BinaryExprType::LogicNotEQ => Ok(Object::Bool(!val1.equals(&val2))),
          BinaryExprType::Nullish => {
             if val1.is_null() {
                Ok(val2)
@@ -484,6 +520,9 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to get the next item in the iterator at the TOS, or jump
+   /// forward by the given offset if the iterator is empty. This instruction primarily used
+   /// in `for-in` loops.
    fn op_get_iter_next_or_jump(&mut self) -> RuntimeResult {
       let jump = self.get_next_short() as usize;
 
@@ -500,6 +539,7 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to create an array object with the top `N` stack objects.
    fn op_make_array(&mut self) -> RuntimeResult {
       // The number of values to pop from the stack. Essentially the size of the array.
       let size = self.get_std_or_long_operand(OpCode::MakeArray);
@@ -513,6 +553,7 @@ impl<'a> VirtualMachine {
       self.push_stack(Object::Array(arr))
    }
 
+   /// Executes the instruction to create a tuple object with the top `N` stack objects.
    fn op_make_tuple(&mut self) -> RuntimeResult {
       // The number of values to pop from the stack. Essentially the size of the array.
       let size = self.get_std_or_long_operand(OpCode::MakeTuple);
@@ -526,6 +567,8 @@ impl<'a> VirtualMachine {
       self.push_stack(Object::Tuple(tup))
    }
 
+   /// Executes the instruction to create a dictionary object with the top `N` key-value
+   /// pairs on the stack, where the key is a Hinton string object and value is any Hinton object.
    fn op_make_dictionary(&mut self) -> RuntimeResult {
       // The number of values to pop from the stack. Essentially the size of the array.
       let size = self.get_std_or_long_operand(OpCode::MakeDict);
@@ -545,16 +588,18 @@ impl<'a> VirtualMachine {
       self.push_stack(Object::Dict(Rc::new(RefCell::new(dict))))
    }
 
+   /// Executes the instruction to subscript and object by some index.
    fn op_indexing(&mut self) -> RuntimeResult {
       let index = self.pop_stack();
       let target = self.pop_stack();
 
-      match target.get_at_index(&index) {
+      match target.subscript(&index) {
          Ok(r) => self.push_stack(r),
          Err(e) => return e.to_runtime_error(),
       }
    }
 
+   /// Executes the instruction to get the value of a local variable.
    fn op_get_local(&mut self) -> RuntimeResult {
       // The position of the local variable's value in the stack
       let pos = self.get_std_or_long_operand(OpCode::GetLocal);
@@ -564,6 +609,7 @@ impl<'a> VirtualMachine {
       self.push_stack(value)
    }
 
+   /// Executes the instruction to modify the value of a local variable.
    fn op_set_local(&mut self) -> RuntimeResult {
       // The position of the local variable's value in the stack
       let pos = self.get_std_or_long_operand(OpCode::SetLocal);
@@ -575,6 +621,7 @@ impl<'a> VirtualMachine {
       RuntimeResult::Continue
    }
 
+   /// Executes the instruction to define a global variable with the object at the TOS.
    fn op_define_global(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::DefineGlobal);
 
@@ -588,6 +635,7 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to get the value of a global variable.
    fn op_get_global(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::GetGlobal);
 
@@ -600,6 +648,7 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to modify the value of a global variable.
    fn op_set_global(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::SetGlobal);
 
@@ -613,6 +662,7 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to create an iterator object with the object at the TOS.
    fn op_make_iter(&mut self) -> RuntimeResult {
       let tos = self.pop_stack();
 
@@ -622,11 +672,14 @@ impl<'a> VirtualMachine {
       }
    }
 
+   /// Executes the instruction to load the integer `N` onto the stack.
    fn op_load_immediate_n(&mut self) -> RuntimeResult {
       let imm = self.get_std_or_long_operand(OpCode::LoadImmN) as i64;
       self.push_stack(Object::Int(imm))
    }
 
+   /// Executes the instruction to load a constant from the current's call frame's
+   /// function's constant pool onto the stack.
    fn op_load_constant(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::LoadConstant);
       let val = self.read_constant(pos).clone();

@@ -13,7 +13,7 @@ impl Compiler {
    /// Compiles a function declaration statement.
    pub(super) fn compile_function_decl(&mut self, decl: &FunctionDeclNode) {
       if let Ok(parent_symbol_pos) = self.declare_symbol(&decl.name, SymbolType::Function) {
-         let func_pos = (decl.name.line_num, decl.name.column_num);
+         let func_pos = (decl.name.line_num, decl.name.column_start);
          let prev_compiler_type = std::mem::replace(&mut self.compiler_type, CompilerType::Function);
 
          // The first element in a symbol table is always the symbol representing
@@ -97,14 +97,12 @@ impl Compiler {
             self.bind_default_params(decl);
          }
 
-         // If we are in the global scope, declarations are
-         // stored in the VM.globals hashmap.
+         // If we are in the global scope, declarations get stored in the VM.globals hashmap.
          if self.is_global_scope() {
             self.define_as_global(&decl.name);
             self.globals.mark_initialized(parent_symbol_pos);
          } else {
-            // Marks the variables as initialized
-            // a.k.a, defines the variables.
+            // Marks the variables as initialized, that is, defines the variables.
             self
                .current_func_scope_mut()
                .s_table
@@ -114,7 +112,7 @@ impl Compiler {
    }
 
    /// Emits the appropriate code to either load a function object from the constant or create
-   // a closure at runtime.
+   /// a closure at runtime.
    ///
    /// # Parameters
    /// - `function`: The function object to be loaded.
@@ -122,6 +120,7 @@ impl Compiler {
    /// - `token`: A reference to the function's token.
    fn emit_function(&mut self, function: FuncObject, up_values: Vec<UpValue>, token: &Token) {
       let func = Object::Function(Rc::new(RefCell::new(function)));
+      let func_pos = (token.line_num, token.column_start);
 
       // If the function does not close over any values, then there is
       // no need to create a closure object at runtime.
@@ -130,42 +129,42 @@ impl Compiler {
          return;
       }
 
-      let func_pos = (token.line_num, token.column_num);
-
-      // Add the function object to the literal pool of the parent function
+      // Composes the closure object from within the parent function.
       if let Some(idx) = self.add_literal_to_pool(func, token, false) {
          if idx < 256 {
             if up_values.len() < 256 {
                self.emit_op_code_with_byte(OpCode::MakeClosure, idx as u8, func_pos);
-
-               for up in up_values {
-                  self.emit_raw_byte(if up.is_local { 1u8 } else { 0u8 }, func_pos);
-                  self.emit_raw_byte(up.index as u8, func_pos);
-               }
+               self.emit_up_values(&up_values, func_pos);
             } else {
                self.emit_op_code_with_byte(OpCode::MakeClosureLarge, idx as u8, func_pos);
-
-               for up in up_values {
-                  self.emit_raw_byte(if up.is_local { 1u8 } else { 0u8 }, func_pos);
-                  self.emit_raw_short(up.index as u16, func_pos);
-               }
+               self.emit_up_values(&up_values, func_pos);
             }
+         } else if up_values.len() < 256 {
+            self.emit_op_code_with_short(OpCode::MakeClosureLong, idx, func_pos);
+            self.emit_up_values(&up_values, func_pos);
          } else {
-            if up_values.len() < 256 {
-               self.emit_op_code_with_short(OpCode::MakeClosureLong, idx, func_pos);
+            self.emit_op_code_with_short(OpCode::MakeClosureLongLarge, idx, func_pos);
+            self.emit_up_values(&up_values, func_pos);
+         }
+      }
+   }
 
-               for up in up_values {
-                  self.emit_raw_byte(if up.is_local { 1u8 } else { 0u8 }, func_pos);
-                  self.emit_raw_byte(up.index as u8, func_pos);
-               }
-            } else {
-               self.emit_op_code_with_short(OpCode::MakeClosureLongLarge, idx, func_pos);
+   /// Emits the bytecode information required to compose the UpValues of a closure at runtime.
+   ///
+   /// # Parameters
+   /// - `up_values`: The UpValues to be composed at runtime.
+   /// - `func_pos`: The source position of the function declaration.
+   fn emit_up_values(&mut self, up_values: &Vec<UpValue>, func_pos: (usize, usize)) {
+      for up in up_values {
+         // Emit the byte that the determines whether this up_value captures a local
+         // variable or another up_value in the parent function.
+         self.emit_raw_byte(if up.is_local { 1u8 } else { 0u8 }, func_pos);
 
-               for up in up_values {
-                  self.emit_raw_byte(if up.is_local { 1u8 } else { 0u8 }, func_pos);
-                  self.emit_raw_short(up.index as u16, func_pos);
-               }
-            }
+         // Emit the byte or short for the position of the up_value.
+         if up_values.len() < 256 {
+            self.emit_raw_byte(up.index as u8, func_pos);
+         } else {
+            self.emit_raw_short(up.index as u16, func_pos);
          }
       }
    }
@@ -173,7 +172,7 @@ impl Compiler {
    /// Emits bytecode to bind the default values for the named parameters of a function.
    ///
    /// # Parameters
-   // * `decl`: The function declaration node where these named parameters were declared.
+   /// * `decl`: The function-declaration node where these named parameters were declared.
    fn bind_default_params(&mut self, decl: &FunctionDeclNode) {
       // Compiles the named parameters so that they can be on top
       // of the stack when the function gets composed at runtime.
@@ -184,7 +183,10 @@ impl Compiler {
             }
             None => {
                if param.is_optional {
-                  self.emit_op_code(OpCode::LoadImmNull, (param.name.line_num, param.name.column_num));
+                  self.emit_op_code(
+                     OpCode::LoadImmNull,
+                     (param.name.line_num, param.name.column_start),
+                  );
                }
             }
          }
@@ -195,7 +197,7 @@ impl Compiler {
       self.emit_op_code_with_byte(
          OpCode::BindDefaults,
          (decl.arity.1 - decl.arity.0) as u8,
-         (decl.name.line_num, decl.name.column_num),
+         (decl.name.line_num, decl.name.column_start),
       );
    }
 
@@ -225,7 +227,7 @@ impl Compiler {
          return;
       }
 
-      self.emit_return(&stmt.value, (stmt.token.line_num, stmt.token.column_num))
+      self.emit_return(&stmt.value, (stmt.token.line_num, stmt.token.column_start))
    }
 
    /// Emits bytecode to return out of a function at runtime.

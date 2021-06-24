@@ -101,22 +101,22 @@ pub enum OpCode {
 
    // Instructions with a variable number of instructions.
    MakeClosure,
-   // Byte #1 is the position of function object in the pool.
+   // Byte #1 is the position of the function object in the pool.
+   // --- UpValue Encoding (2 bytes per up_value) ---
+   // One byte if up value is local
+   // One byte for the position of the up value
+   MakeClosureLong,
+   // Byte #1 and Byte #2 are the position of the function object in the pool.
    // --- UpValue Encoding (2 bytes per up_value) ---
    // One byte if up value is local
    // One byte for the position of the up value
    MakeClosureLarge,
-   // Byte #1 is the position of function object in the pool.
+   // Byte #1 is the position of the function object in the pool.
    // --- UpValue Encoding (3 bytes per up_value) ---
    // One byte if up value is local
    // Two bytes for the position of the up value
-   MakeClosureLong,
-   // Byte #1 and Byte #2 is the position of function object in the pool.
-   // --- UpValue Encoding (2 bytes per up_value) ---
-   // One byte if up value is local
-   // One byte for the position of the up value
    MakeClosureLongLarge,
-   // Byte #1 and Byte #2 is the position of function object in the pool.
+   // Byte #1 and Byte #2 are the position of the function object in the pool.
    // --- UpValue Encoding (3 bytes per up_value) ---
    // One byte if up value is local
    // Two bytes for the position of the up value

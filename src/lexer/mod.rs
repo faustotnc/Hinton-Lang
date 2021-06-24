@@ -12,7 +12,7 @@ pub struct Lexer {
    /// The index of the current character.
    current: usize,
    /// The current line index.
-   line: usize,
+   line_num: usize,
    /// The position in the flat source vector of the first
    /// character for the current line.
    line_start: usize,
@@ -36,7 +36,7 @@ impl Lexer {
       Self {
          source: chars,
          current: 0,
-         line: 1,
+         line_num: 1,
          line_start: 0,
          token_start: 0,
       }
@@ -46,7 +46,7 @@ impl Lexer {
    ///
    /// # Returns
    /// - `char`: The previous character.
-   pub fn previous(&self) -> char {
+   pub fn get_previous(&self) -> char {
       self.source[self.current - 1]
    }
 
@@ -55,15 +55,6 @@ impl Lexer {
    /// # Returns
    /// - `char`: The current character.
    pub fn get_current(&self) -> char {
-      // TODO: What can you do so that this check is no longer needed?
-      // NOTE: At the moment, if this check is removed, Rust will panic
-      // because at some point in the program (I am not sure where), the
-      // lexer tries to get the (N + 1)th element of the vector, causing
-      // an index-out-of-bounds error.
-      if self.is_at_end() {
-         return '\0';
-      }
-
       self.source[self.current]
    }
 
@@ -112,58 +103,70 @@ impl Lexer {
    /// Skips whitespace-like characters from the source code.
    pub fn skip_whitespace(&mut self) {
       loop {
+         if self.is_at_end() {
+            break;
+         }
+
          let c = self.get_current();
 
          if c == ' ' || c == '\r' || c == '\t' {
             self.advance();
          } else if c == '\n' {
-            self.line += 1;
+            self.line_num += 1;
             self.line_start = self.current + 1;
             self.advance();
-         } else if c == '/' && (self.next() == '/' || self.next() == '*') {
-            self.skip_comments();
+         } else if c == '/' && self.next() == '/' {
+            self.skip_single_line_comments();
+         } else if c == '/' && self.next() == '*' {
+            self.skip_block_comments();
          } else {
             break;
          }
       }
    }
 
-   /// Skips single-line and block comments from the source code.
-   /// TODO: Allow nesting block comments
-   pub fn skip_comments(&mut self) {
-      // single-line comments
-      if self.get_current() == '/' && self.next() == '/' {
-         while self.get_current() != '\n' && !self.is_at_end() {
-            self.advance();
-         }
+   /// Skips single-line comments from the source code.
+   fn skip_single_line_comments(&mut self) {
+      while !self.is_at_end() && self.get_current() != '\n' {
+         self.advance();
       }
 
-      // block comments
-      if self.get_current() == '/' && self.next() == '*' {
-         self.advance();
-         self.advance();
+      // Reposition the start of the token to
+      // be after the comment has ended
+      self.token_start = self.current;
+   }
 
-         loop {
-            // Break if we are at the end of the comment.
-            if self.get_current() == '*' && self.next() == '/' {
-               self.advance();
-               self.advance();
-               break;
-            }
+   /// Skips block-comments from the source code
+   fn skip_block_comments(&mut self) {
+      self.advance();
+      self.advance();
 
-            // Break if we have reached the end of the program
+      while !self.is_at_end() {
+         // Recursively skip nested block comments
+         if self.get_current() == '/' && self.next() == '*' {
+            self.skip_block_comments();
+
+            // break out of the loop if we reached the end of the program
+            // before matching the end of this nested block-comment.
             if self.is_at_end() {
                break;
-            };
-
-            // Take into account new lines inside block comments
-            if self.get_current() == '\n' {
-               self.line += 1;
             }
-
-            // Skip everything inside the comment
-            self.advance();
          }
+
+         // Break if we are at the end of the comment.
+         if self.get_current() == '*' && self.next() == '/' {
+            self.advance();
+            self.advance();
+            break;
+         }
+
+         // Take into account new lines inside block comments
+         if self.get_current() == '\n' {
+            self.line_num += 1;
+         }
+
+         // Skip everything inside the comment
+         self.advance();
       }
 
       // Reposition the start of the token to
@@ -172,35 +175,34 @@ impl Lexer {
    }
 
    /// Makes a string literal.
-   ///
-   /// # Returns
-   /// - `Token`: A string token.
    pub fn make_string_token(&mut self) -> Token {
       // The opener single or double quote.
-      let quote = self.previous();
+      let quote = self.get_previous();
 
-      // Keep consuming characters until there is an unescaped quote or
-      // the program reaches the end of the source file.
-      while (self.get_current() != quote || (self.get_current() == quote && self.previous() == '\\'))
-         && !self.is_at_end()
-      {
-         self.advance();
+      loop {
+         if self.is_at_end() {
+            return self.make_error_token("Unterminated string.");
+         }
+
+         let prev = self.get_previous();
+         let current = self.advance();
+
+         // Take into account new lines inside block strings
+         if current == '\n' {
+            self.line_num += 1;
+            continue;
+         }
+
+         // If we reach an unescaped quote, break the loop.
+         if current == quote && prev != '\\' {
+            break;
+         }
       }
 
-      if self.is_at_end() {
-         return self.make_error_token("Unterminated string.");
-      }
-
-      // The closing quotes.
-      self.advance();
-
-      return self.make_token(TokenType::STRING);
+      self.make_token(TokenType::STRING)
    }
 
    /// Generates an identifier token with the current state of the scanner.
-   ///
-   /// # Returns
-   /// - `Token`: An identifier token.
    pub fn make_identifier_token(&mut self) -> Token {
       while !self.is_at_end() {
          let c = self.get_current();
@@ -220,31 +222,26 @@ impl Lexer {
       return self.make_token(tok_type);
    }
 
-   /// Generates a token with the current state of the scanner
-   /// # Parameters
-   /// - `tok_type`: The type of the token to generate.
-   ///
-   /// # Returns
-   /// - `Token`: The generated token (of any type).
-   pub fn make_token(&self, tok_type: TokenType) -> Token {
+   /// Generates a token with the current state of the scanner.
+   pub fn make_token(&self, token_type: TokenType) -> Token {
+      let col_start = match token_type {
+         TokenType::EOF => self.current,
+         _ => self.token_start - self.line_start,
+      };
+
+      let lexeme = match token_type {
+         TokenType::EOF => String::from("\0"),
+         _ => self.source[(self.token_start)..(self.current)]
+            .into_iter()
+            .collect(),
+      };
+
       Token {
-         line_num: self.line,
-         column_num: if tok_type.clone() as u8 != TokenType::EOF as u8 {
-            self.token_start - self.line_start
-         } else {
-            self.current
-         },
-         token_type: tok_type.clone(),
-         // If the token is the EOF token, then the lexeme becomes the null terminator.
-         // It is okay to use the null terminator for the EOF value because the EOF Token's
-         // lexeme is never used for anything.
-         lexeme: if tok_type as u8 != TokenType::EOF as u8 {
-            self.source[(self.token_start)..(self.current)]
-               .into_iter()
-               .collect()
-         } else {
-            String::from("\0")
-         },
+         line_num: self.line_num,
+         column_start: col_start,
+         column_end: self.current,
+         token_type,
+         lexeme,
       }
    }
 
@@ -257,8 +254,9 @@ impl Lexer {
    /// - `Token`: The generated error token.
    pub fn make_error_token(&self, message: &str) -> Token {
       Token {
-         line_num: self.line,
-         column_num: self.token_start - self.line_start,
+         line_num: self.line_num,
+         column_start: self.token_start - self.line_start,
+         column_end: self.current,
          token_type: TokenType::ERROR,
          lexeme: String::from(message),
       }

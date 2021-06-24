@@ -22,8 +22,9 @@ pub enum SL {
    UpValue(UpValue, usize),
    /// Represents a native function symbol.
    Native,
-   /// Represents a not-found symbol.
-   None,
+   /// Represents a symbol that was found, but there
+   /// was an error with its resolution.
+   Error,
 }
 
 /// Represents a symbol. Used for lexical scoping.
