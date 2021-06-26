@@ -59,21 +59,16 @@ impl Parser {
       // Start compiling the chunk
       parser.advance();
       while !parser.matches(&EOF) {
-         match parser.parse_declaration() {
-            Some(val) => program.body.push(val),
-            None => {
-               // If there was an error, continue parsing
-               // to catch other errors in the program, but
-               // the AST will (of course) not be usable.
-            }
+         if let Some(val) = parser.parse_declaration() {
+            program.body.push(val)
          }
       }
 
-      return if parser.errors.len() == 0 {
+      if parser.errors.is_empty() {
          Ok(ASTNode::Module(program))
       } else {
          Err(parser.errors)
-      };
+      }
    }
 
    /// Checks that the current token matches the tokenType provided.
@@ -98,12 +93,12 @@ impl Parser {
    /// # Returns
    /// `bool`: True if the tokens match, false otherwise.
    fn matches(&mut self, tok_type: &TokenType) -> bool {
-      return if self.check(tok_type) {
+      if self.check(tok_type) {
          self.advance();
          true
       } else {
          false
-      };
+      }
    }
 
    /// Advances the parser to the next token.

@@ -20,7 +20,7 @@ mod virtual_machine;
 mod tests;
 
 /// Represents the arguments passed to the Hinton CLI.
-struct CLI {
+struct HintonCLI {
    flags: Vec<String>,
    args: Vec<String>,
 }
@@ -34,7 +34,7 @@ fn main() {
    let args: Vec<String> = env::args().collect();
 
    // new CLI
-   let mut _self = CLI {
+   let mut _self = HintonCLI {
       flags: vec![],
       args: vec![],
    };
@@ -48,9 +48,7 @@ fn main() {
    let mut file_name_arg_pos = 1;
 
    // Get program flags
-   for arg_pos in 1..(args.len() + 1) {
-      let arg = &args[arg_pos];
-
+   for arg in args.iter() {
       if arg.to_string().starts_with("--") {
          _self.flags.push(arg.to_lowercase());
          file_name_arg_pos += 1;

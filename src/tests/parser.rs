@@ -8,75 +8,75 @@ fn variable_reassignment_operators() {
       a >>= 8; a &= 9;  a |= 9; a ^= 9;
    ";
 
-   if let Err(_) = Parser::parse(src) {
+   if Parser::parse(src).is_err() {
       panic!("Had error with reassignment.")
    }
 }
 
 #[test]
 fn reassignment_on_literal() {
-   if let Ok(_) = Parser::parse("2 = 43;") {
+   if Parser::parse("2 = 43;").is_ok() {
       panic!("Cannot assign to literal value.")
    }
 }
 
 #[test]
 fn expect_colon_in_ternary_operator() {
-   if let Ok(_) = Parser::parse("true ? false;") {
+   if Parser::parse("true ? false;").is_ok() {
       panic!("Should expect colon in ternary operator.")
    }
 }
 
 #[test]
 fn allow_chained_ternary_expressions() {
-   if let Err(_) = Parser::parse("true ? false : null ? true : false;") {
+   if Parser::parse("true ? false : null ? true : false;").is_err() {
       panic!("Should allow chained ternary conditional expressions.")
    }
 }
 
 #[test]
 fn panic_on_unterminated_string() {
-   if let Ok(_) = Parser::parse("\"hello world") {
+   if Parser::parse("\"hello world").is_ok() {
       panic!("Should emit error on unterminated strings.")
    }
 
-   if let Ok(_) = Parser::parse("\'hello world") {
+   if Parser::parse("\'hello world").is_ok() {
       panic!("Should emit error on unterminated strings.")
    }
 
-   if let Ok(_) = Parser::parse("\"I\"m over here!\";") {
+   if Parser::parse("\"I\"m over here!\";").is_ok() {
       panic!("Should emit error on unterminated strings.")
    }
 
-   if let Ok(_) = Parser::parse("'I'm over here!';") {
+   if Parser::parse("'I'm over here!';").is_ok() {
       panic!("Should emit error on unterminated strings.")
    }
 }
 
 #[test]
 fn allow_double_quoted_strings() {
-   if let Err(_) = Parser::parse("\"I am going to the moon tomorrow.\";") {
+   if Parser::parse("\"I am going to the moon tomorrow.\";").is_err() {
       panic!("Should allow double-quoted strings.")
    }
 }
 
 #[test]
 fn allow_escaped_double_quoted_strings() {
-   if let Err(_) = Parser::parse("\"He said told me to \\\"stay quiet\\\", yesterday.\";") {
+   if Parser::parse("\"He said told me to \\\"stay quiet\\\", yesterday.\";").is_err() {
       panic!("Should allow escaped double-quotes.")
    }
 }
 
 #[test]
 fn allow_single_quoted_strings() {
-   if let Err(_) = Parser::parse("'The sky is green!';") {
+   if Parser::parse("'The sky is green!';").is_err() {
       panic!("Should allow single-quoted strings.")
    }
 }
 
 #[test]
 fn allow_escaped_single_quoted_strings() {
-   if let Err(_) = Parser::parse("'I\\\'m over here!';") {
+   if Parser::parse("'I\\\'m over here!';").is_err() {
       panic!("Should allow escaped single-quoted strings.")
    }
 }

@@ -75,7 +75,7 @@ impl Lexer {
    /// # Returns
    /// - `bool`: True if the scanner is at the end of the source, false otherwise.
    pub fn is_at_end(&self) -> bool {
-      return self.current >= self.source.len();
+      self.current >= self.source.len()
    }
 
    /// Matches the current character against a provided character
@@ -87,7 +87,7 @@ impl Lexer {
          return false;
       }
       self.current += 1;
-      return true;
+      true
    }
 
    /// Advances to the next token.
@@ -95,9 +95,9 @@ impl Lexer {
    /// # Returns
    /// - `char`: The consumed character.
    pub fn advance(&mut self) -> char {
-      let c = self.get_current();
+      let current = self.get_current();
       self.current += 1;
-      return c;
+      current
    }
 
    /// Skips whitespace-like characters from the source code.
@@ -214,12 +214,10 @@ impl Lexer {
          }
       }
 
-      let id: String = self.source[(self.token_start)..(self.current)]
-         .into_iter()
-         .collect();
+      let id: String = self.source[(self.token_start)..(self.current)].iter().collect();
       let tok_type = tokens::make_identifier_type(id.as_str());
 
-      return self.make_token(tok_type);
+      self.make_token(tok_type)
    }
 
    /// Generates a token with the current state of the scanner.
@@ -231,9 +229,7 @@ impl Lexer {
 
       let lexeme = match token_type {
          TokenType::EOF => String::from("\0"),
-         _ => self.source[(self.token_start)..(self.current)]
-            .into_iter()
-            .collect(),
+         _ => self.source[(self.token_start)..(self.current)].iter().collect(),
       };
 
       Token {

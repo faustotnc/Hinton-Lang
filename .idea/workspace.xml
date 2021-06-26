@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AnalysisUIOptions">
+    <option name="SHOW_STRUCTURE" value="true" />
+  </component>
   <component name="AutoImportSettings">
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
@@ -19,25 +22,17 @@
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/ast.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/ast.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/bytecode.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bytecode.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/expressions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/expressions.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/functions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/functions.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/loops.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/loops.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/resolver.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/resolver.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/statements.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/statements.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/symbols.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/symbols.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/errors.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/errors.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lexer/lex_next_token.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lexer/lex_next_token.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lexer/lex_numbers.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lexer/lex_numbers.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lexer/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lexer/mod.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/lexer/tokens.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lexer/tokens.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/natives.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/natives.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/objects/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/objects/indexing.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/indexing.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/objects/native_operations.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/native_operations.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/parser/expressions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/expressions.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/parser/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/mod.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/parser/statements.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/statements.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/tests/compiler.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/tests/compiler.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/tests/hinton/test.ht" beforeDir="false" afterPath="$PROJECT_DIR$/src/tests/hinton/test.ht" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/virtual_machine/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/virtual_machine/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/virtual_machine/run.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/virtual_machine/run.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -69,7 +64,7 @@
     <option name="directoryName" value="j2k46s8z" />
   </component>
   <component name="ProblemsViewState">
-    <option name="selectedIndex" value="11" />
+    <option name="selectedIndex" value="2" />
   </component>
   <component name="ProjectId" id="1uHRQwqtykRYnoxSAMqKg2FF90E" />
   <component name="ProjectViewState">
@@ -108,6 +103,11 @@
     </option>
   </component>
   <component name="RunManager" selected="Cargo.Run Hinton Test">
+    <configuration default="true" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" PASS_PARENT_ENVS_2="true">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="Run Development" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="command" value="run ./development/test.ht" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -156,11 +156,6 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration default="true" type="GradleAppRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="com.jetbrains.cidr.cpp.gradle.execution.GradleNativeBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
     <list>
       <item itemvalue="Cargo.Run Development" />
       <item itemvalue="Cargo.Run Hinton Test" />
@@ -187,7 +182,8 @@
       <workItem from="1624370908911" duration="554000" />
       <workItem from="1624371556260" duration="11880000" />
       <workItem from="1624453778615" duration="233000" />
-      <workItem from="1624462448106" duration="56631000" />
+      <workItem from="1624462448106" duration="57035000" />
+      <workItem from="1624733933699" duration="1166000" />
     </task>
     <servers />
   </component>

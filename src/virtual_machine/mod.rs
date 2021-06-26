@@ -31,23 +31,20 @@ impl CallFrame {
 
    /// Gets the current instruction and advances the instruction pointer to the next instruction.
    fn get_next_op_code(&mut self) -> OpCode {
-      let code = self.closure.function.borrow().chunk.get_op_code(self.ip);
       self.ip += 1;
-      return code;
+      self.closure.function.borrow().chunk.get_op_code(self.ip - 1)
    }
 
    /// Gets the current raw byte and advances the instruction pointer to the next instruction.
    fn get_next_byte(&mut self) -> u8 {
-      let code = self.closure.function.borrow().chunk.get_byte(self.ip);
       self.ip += 1;
-      return code;
+      self.closure.function.borrow().chunk.get_byte(self.ip - 1)
    }
 
    /// Gets the current two raw bytes and advances the instruction pointer by 2 instructions.
    fn get_next_short(&mut self) -> u16 {
-      let next_short = self.closure.function.borrow().chunk.get_short(self.ip);
       self.ip += 2;
-      return next_short;
+      self.closure.function.borrow().chunk.get_short(self.ip - 2)
    }
 
    /// Gets an object from the current call frame's constant pool.
@@ -128,7 +125,7 @@ impl VirtualMachine {
       let f = Rc::new(RefCell::new(module));
       _self.stack.push(Object::Function(f.clone()));
 
-      return match _self.call_function(f, 0) {
+      match _self.call_function(f, 0) {
          RuntimeResult::Continue => {
             // Runs the program.
             match _self.run() {
@@ -145,7 +142,7 @@ impl VirtualMachine {
             InterpretResult::RuntimeError
          }
          RuntimeResult::EndOK => unreachable!(),
-      };
+      }
    }
 
    /// Gets a reference to the call frames stack.

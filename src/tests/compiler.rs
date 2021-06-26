@@ -28,7 +28,7 @@ fn base_func_has_no_defaults() {
 
    match Compiler::compile_ast(&PathBuf::new(), &program, vec![]) {
       Ok(res) => {
-         if res.defaults.len() != 0 {
+         if !res.defaults.is_empty() {
             panic!("Base function in script should have 0 default parameters.")
          }
       }
@@ -62,7 +62,7 @@ fn allow_break_inside_compact_while_loop() {
       Err(_) => panic!("Parser Had Errors."),
    };
 
-   if let Err(_) = Compiler::compile_ast(&PathBuf::new(), &program, vec![]) {
+   if Compiler::compile_ast(&PathBuf::new(), &program, vec![]).is_err() {
       panic!("Compiler should allow break statements inside of compact while loops.")
    }
 }
@@ -74,7 +74,7 @@ fn allow_break_inside_compact_for_loop() {
       Err(_) => panic!("Parser Had Errors."),
    };
 
-   if let Err(_) = Compiler::compile_ast(&PathBuf::new(), &program, vec![]) {
+   if Compiler::compile_ast(&PathBuf::new(), &program, vec![]).is_err() {
       panic!("Compiler should allow break statements inside of compact for loops.")
    }
 }
@@ -92,7 +92,7 @@ fn allow_break_inside_nested_while_loop_scope() {
       Err(_) => panic!("Parser Had Errors."),
    };
 
-   if let Err(_) = Compiler::compile_ast(&PathBuf::new(), &program, vec![]) {
+   if Compiler::compile_ast(&PathBuf::new(), &program, vec![]).is_err() {
       panic!("Compiler should allow break statements inside of nested while loop scopes.")
    }
 }
@@ -110,7 +110,7 @@ fn allow_break_inside_nested_for_loop_scope() {
       Err(_) => panic!("Parser Had Errors."),
    };
 
-   if let Err(_) = Compiler::compile_ast(&PathBuf::new(), &program, vec![]) {
+   if Compiler::compile_ast(&PathBuf::new(), &program, vec![]).is_err() {
       panic!("Compiler should allow break statements inside of nested for loop scopes.")
    }
 }
@@ -122,7 +122,7 @@ fn error_if_break_outside_loop() {
       Err(_) => panic!("Parser Had Errors."),
    };
 
-   if let Ok(_) = Compiler::compile_ast(&PathBuf::new(), &program, vec![]) {
+   if Compiler::compile_ast(&PathBuf::new(), &program, vec![]).is_ok() {
       panic!("Compiler should emit error when breaking outside of a loop.")
    }
 }
@@ -134,7 +134,7 @@ fn error_if_break_inside_func_inside_loop() {
       Err(_) => panic!("Parser Had Errors."),
    };
 
-   if let Ok(_) = Compiler::compile_ast(&PathBuf::new(), &program, vec![]) {
+   if Compiler::compile_ast(&PathBuf::new(), &program, vec![]).is_ok() {
       panic!("Compiler should emit error when breaking outside inside a function inside a loop.")
    }
 }
@@ -146,7 +146,7 @@ fn error_if_return_outside_func() {
       Err(_) => panic!("Parser Had Errors."),
    };
 
-   if let Ok(_) = Compiler::compile_ast(&PathBuf::new(), &program, vec![]) {
+   if Compiler::compile_ast(&PathBuf::new(), &program, vec![]).is_ok() {
       panic!("Compiler should emit error when returning from outside of function.")
    }
 }
@@ -158,7 +158,7 @@ fn allow_return_inside_loop_inside_func() {
       Err(_) => panic!("Parser Had Errors."),
    };
 
-   if let Err(_) = Compiler::compile_ast(&PathBuf::new(), &program, vec![]) {
+   if Compiler::compile_ast(&PathBuf::new(), &program, vec![]).is_err() {
       panic!("Compiler should allow returning from loop inside function.")
    }
 }
@@ -178,7 +178,7 @@ fn functions_have_access_to_global_vars() {
       Err(_) => panic!("Parser Had Errors."),
    };
 
-   if let Err(_) = Compiler::compile_ast(&PathBuf::new(), &program, vec![String::from("print")]) {
+   if Compiler::compile_ast(&PathBuf::new(), &program, vec![String::from("print")]).is_err() {
       panic!("Functions should have access to global declarations.")
    }
 }

@@ -10,20 +10,11 @@ impl Parser {
    /// Parses a declaration.
    pub(super) fn parse_declaration(&mut self) -> Option<ASTNode> {
       let decl = if self.matches(&VAR_KW) {
-         match self.parse_var_declaration() {
-            Some(decl) => Some(VariableDecl(decl)),
-            None => None,
-         }
+         self.parse_var_declaration().map(VariableDecl)
       } else if self.matches(&CONST_KW) {
-         match self.parse_const_declaration() {
-            Some(decl) => Some(ConstantDecl(decl)),
-            None => None,
-         }
+         self.parse_const_declaration().map(ConstantDecl)
       } else if self.matches(&FUNC_KW) {
-         match self.parse_func_declaration() {
-            Some(decl) => Some(FunctionDecl(decl)),
-            None => None,
-         }
+         self.parse_func_declaration().map(FunctionDecl)
       } else if self.matches(&CLASS_KW) {
          self.parse_class_declaration()
       } else {
@@ -51,18 +42,18 @@ impl Parser {
          let tok = self.previous.clone();
          self.consume(&SEMICOLON, "Expected a ';' after the 'break' keyword.");
 
-         return Some(LoopBranch(LoopBranchStmtNode {
-            token: tok.clone(),
+         Some(LoopBranch(LoopBranchStmtNode {
+            token: tok,
             is_break: true,
-         }));
+         }))
       } else if self.matches(&CONTINUE_KW) {
          let tok = self.previous.clone();
          self.consume(&SEMICOLON, "Expected a ';' after the 'continue' keyword.");
 
-         return Some(LoopBranch(LoopBranchStmtNode {
-            token: tok.clone(),
+         Some(LoopBranch(LoopBranchStmtNode {
+            token: tok,
             is_break: false,
-         }));
+         }))
       } else if self.matches(&RETURN_KW) {
          self.parse_return_stmt()
       } else {
@@ -77,13 +68,13 @@ impl Parser {
 
       self.consume(&SEMICOLON, "Expected a ';' after the expression.");
 
-      return Some(ExpressionStmt(ExpressionStmtNode {
+      Some(ExpressionStmt(ExpressionStmtNode {
          child: match expr {
             Some(t) => Box::new(t),
             None => return None, // Could not create expression to print
          },
          pos: (opr.line_num, opr.column_start),
-      }));
+      }))
    }
 
    /// Parses a block statement.
@@ -100,10 +91,10 @@ impl Parser {
 
       self.consume(&R_CURLY, "Expected a matching '}' for the block statement.");
 
-      return Some(BlockStmt(BlockNode {
+      Some(BlockStmt(BlockNode {
          body,
          end_of_block: self.previous.clone(),
-      }));
+      }))
    }
 
    /// Parses a variable declaration.
@@ -146,10 +137,10 @@ impl Parser {
          self.advance();
       }
 
-      return Some(VariableDeclNode {
+      Some(VariableDeclNode {
          identifiers: declarations,
-         value: Box::new(initializer.clone()),
-      });
+         value: Box::new(initializer),
+      })
    }
 
    /// Parses a constant declaration.
@@ -176,10 +167,10 @@ impl Parser {
          self.advance();
       }
 
-      return Some(ConstantDeclNode {
+      Some(ConstantDeclNode {
          name,
-         value: Box::new(initializer.clone()),
-      });
+         value: Box::new(initializer),
+      })
    }
 
    /// Parses an `if` statement.
@@ -217,13 +208,13 @@ impl Parser {
          };
       }
 
-      return Some(IfStmt(IfStmtNode {
+      Some(IfStmt(IfStmtNode {
          condition: Box::new(condition),
          then_token: then_tok,
          then_branch: Box::new(then_branch),
          else_branch: Box::new(else_branch),
          else_token: else_tok,
-      }));
+      }))
    }
 
    /// Parses a `while` statement.
@@ -250,11 +241,11 @@ impl Parser {
          };
       }
 
-      return Some(WhileStmt(WhileStmtNode {
+      Some(WhileStmt(WhileStmtNode {
          token: tok,
          condition: Box::new(condition),
          body: Box::new(body),
-      }));
+      }))
    }
 
    /// Parses a `for-in` statement.
@@ -315,12 +306,12 @@ impl Parser {
          };
       }
 
-      return Some(ForStmt(ForStmtNode {
+      Some(ForStmt(ForStmtNode {
          token,
          id,
          iterator,
          body,
-      }));
+      }))
    }
 
    /// Parses a function declaration.
@@ -345,7 +336,7 @@ impl Parser {
 
          match self.parse_parameter() {
             Some(p) => {
-               if params.len() > 0 && !p.is_optional && params.last().unwrap().is_optional {
+               if !params.is_empty() && !p.is_optional && params.last().unwrap().is_optional {
                   self.error_at_token(
                      &params.last().unwrap().name.clone(),
                      "Optional and named parameters must be declared after all required parameters.",
@@ -439,10 +430,10 @@ impl Parser {
          }));
       }
 
-      return Some(ReturnStmt(ReturnStmtNode {
+      Some(ReturnStmt(ReturnStmtNode {
          token: tok,
          value: None,
-      }));
+      }))
    }
 
    /// Parses a `class` declaration statement.
@@ -481,11 +472,11 @@ impl Parser {
          };
       }
 
-      return Some(ClassDecl(ClassDeclNode {
+      Some(ClassDecl(ClassDeclNode {
          name,
          methods,
          var_fields,
          const_fields,
-      }));
+      }))
    }
 }

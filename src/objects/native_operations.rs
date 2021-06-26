@@ -38,7 +38,7 @@ impl std::ops::Add<Object> for Object {
             Object::Float(rhs) => Ok(Object::Float(lhs as f64 + rhs)),
             Object::Bool(rhs) => Ok(Object::Int(lhs + if rhs { 1 } else { 0 })),
             Object::String(rhs) => Ok(Object::String(format!("{}{}", lhs, rhs))),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Float(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Float(lhs + rhs as f64)),
@@ -50,7 +50,7 @@ impl std::ops::Add<Object> for Object {
                if lhs.fract() == 0.0 { ".0" } else { "" },
                rhs
             ))),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::String(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::String(format!("{}{}", lhs, rhs))),
@@ -61,21 +61,21 @@ impl std::ops::Add<Object> for Object {
                if rhs.fract() == 0.0 { ".0" } else { "" }
             ))),
             Object::String(rhs) => Ok(Object::String(format!("{}{}", lhs, rhs))),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(rhs + 1i64)),
             Object::Float(rhs) => Ok(Object::Float(rhs + 1f64)),
             Object::Bool(rhs) => Ok(Object::Int(1 + if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if !lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(rhs)),
             Object::Float(rhs) => Ok(Object::Float(rhs)),
             Object::Bool(rhs) => Ok(Object::Int(if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 }
@@ -96,27 +96,27 @@ impl std::ops::Sub<Object> for Object {
             Object::Int(rhs) => Ok(Object::Int(lhs - rhs)),
             Object::Float(rhs) => Ok(Object::Float(lhs as f64 - rhs)),
             Object::Bool(rhs) => Ok(Object::Int(lhs - if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Float(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Float(lhs - rhs as f64)),
             Object::Float(rhs) => Ok(Object::Float(lhs - rhs)),
             Object::Bool(rhs) => Ok(Object::Float(lhs - if rhs { 1f64 } else { 0f64 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(1i64 - rhs)),
             Object::Float(rhs) => Ok(Object::Float(1f64 - rhs)),
             Object::Bool(rhs) => Ok(Object::Int(1 - if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if !lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(-rhs)),
             Object::Float(rhs) => Ok(Object::Float(-rhs)),
             Object::Bool(rhs) => Ok(Object::Int(if rhs { -1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 }
@@ -138,31 +138,31 @@ impl std::ops::Mul<Object> for Object {
             Object::Float(rhs) => Ok(Object::Float(lhs as f64 * rhs)),
             Object::Bool(rhs) => Ok(Object::Int(if rhs { lhs } else { 0 })),
             Object::String(rhs) => Ok(Object::String(rhs.repeat(lhs as usize))),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Float(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Float(lhs * rhs as f64)),
             Object::Float(rhs) => Ok(Object::Float(lhs * rhs)),
             Object::Bool(rhs) => Ok(Object::Float(if rhs { lhs } else { 0f64 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::String(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::String(lhs.repeat(rhs as usize))),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(rhs)),
             Object::Float(rhs) => Ok(Object::Float(rhs)),
             Object::Bool(rhs) => Ok(Object::Int(if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if !lhs => match rhs {
             Object::Int(_) => Ok(Object::Int(0)),
             Object::Float(_) => Ok(Object::Float(0f64)),
             Object::Bool(_) => Ok(Object::Int(0)),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 }
@@ -194,27 +194,27 @@ impl std::ops::Div<Object> for Object {
             Object::Int(rhs) => Ok(Object::Float(lhs as f64 / rhs as f64)),
             Object::Float(rhs) => Ok(Object::Float(lhs as f64 / rhs)),
             Object::Bool(_) => Ok(Object::Float(lhs as f64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Float(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Float(lhs / rhs as f64)),
             Object::Float(rhs) => Ok(Object::Float(lhs / rhs)),
             Object::Bool(_) => Ok(Object::Float(lhs as f64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Float(1f64 / rhs as f64)),
             Object::Float(rhs) => Ok(Object::Float(1f64 / rhs)),
             Object::Bool(_) => Ok(Object::Float(1f64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if !lhs => match rhs {
             Object::Int(_) => Ok(Object::Float(0f64)),
             Object::Float(_) => Ok(Object::Float(0f64)),
             Object::Bool(_) => Ok(Object::Float(0f64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 }
@@ -246,27 +246,27 @@ impl std::ops::Rem<Object> for Object {
             Object::Int(rhs) => Ok(Object::Int(lhs % rhs)),
             Object::Float(rhs) => Ok(Object::Int(lhs % rhs.floor() as i64)),
             Object::Bool(_) => Ok(Object::Int(0i64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Float(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Float(lhs % rhs as f64)),
             Object::Float(rhs) => Ok(Object::Float(lhs % rhs)),
             Object::Bool(_) => Ok(Object::Float(lhs % 1f64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(1i64 % rhs)),
             Object::Float(rhs) => Ok(Object::Float(1f64 % rhs)),
             Object::Bool(_) => Ok(Object::Int(0i64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if !lhs => match rhs {
             Object::Int(_) => Ok(Object::Int(0i64)),
             Object::Float(_) => Ok(Object::Float(0f64)),
             Object::Bool(_) => Ok(Object::Int(0i64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 }
@@ -286,14 +286,14 @@ impl std::ops::BitAnd<Object> for Object {
          Object::Int(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Int(lhs & rhs)),
             Object::Bool(rhs) => Ok(Object::Int(lhs & if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(if lhs { 1 } else { 0 } & rhs)),
             Object::Bool(rhs) => Ok(Object::Int(if lhs { 1 } else { 0 } & if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 }
@@ -313,14 +313,14 @@ impl std::ops::BitOr<Object> for Object {
          Object::Int(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Int(lhs | rhs)),
             Object::Bool(rhs) => Ok(Object::Int(lhs | if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(if lhs { 1 } else { 0 } | rhs)),
             Object::Bool(rhs) => Ok(Object::Int(if lhs { 1 } else { 0 } | if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 }
@@ -340,14 +340,14 @@ impl std::ops::BitXor<Object> for Object {
          Object::Int(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Int(lhs ^ rhs)),
             Object::Bool(rhs) => Ok(Object::Int(lhs ^ if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(if lhs { 1 } else { 0 } ^ rhs)),
             Object::Bool(rhs) => Ok(Object::Int(if lhs { 1 } else { 0 } ^ if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 }
@@ -367,14 +367,14 @@ impl std::ops::Shl<Object> for Object {
          Object::Int(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Int(lhs << rhs)),
             Object::Bool(rhs) => Ok(Object::Int(lhs << if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(if lhs { 1 } else { 0 } << rhs)),
             Object::Bool(rhs) => Ok(Object::Int(if lhs { 1 } else { 0 } << if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 }
@@ -394,14 +394,14 @@ impl std::ops::Shr<Object> for Object {
          Object::Int(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Int(lhs >> rhs)),
             Object::Bool(rhs) => Ok(Object::Int(lhs >> if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(if lhs { 1 } else { 0 } >> rhs)),
             Object::Bool(rhs) => Ok(Object::Int(if lhs { 1 } else { 0 } >> if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 }
@@ -443,29 +443,29 @@ impl Object {
             Object::Float(rhs) => Ok(Object::Float((lhs as f64).powf(rhs))),
             Object::Bool(rhs) if rhs => Ok(Object::Int(lhs)),
             Object::Bool(rhs) if !rhs => Ok(Object::Int(1)),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Float(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Float(lhs.powf(rhs as f64))),
             Object::Float(rhs) => Ok(Object::Float(lhs.powf(rhs))),
             Object::Bool(rhs) if rhs => Ok(Object::Float(lhs)),
             Object::Bool(rhs) if !rhs => Ok(Object::Float(1f64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if lhs => match rhs {
             Object::Int(_) => Ok(Object::Int(1i64)),
             Object::Float(_) => Ok(Object::Float(1f64)),
             Object::Bool(_) => Ok(Object::Int(1i64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) if !lhs => match rhs {
             Object::Int(rhs) => Ok(Object::Int(0f64.powf(rhs as f64) as i64)),
             Object::Float(rhs) => Ok(Object::Float(0f64.powf(rhs))),
             Object::Bool(rhs) if rhs => Ok(Object::Int(0i64)),
             Object::Bool(rhs) if !rhs => Ok(Object::Int(1i64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 
@@ -482,21 +482,21 @@ impl Object {
             Object::Int(rhs) => Ok(Object::Bool(lhs > rhs)),
             Object::Float(rhs) => Ok(Object::Bool((lhs as f64) > rhs)),
             Object::Bool(rhs) if rhs => Ok(Object::Bool(lhs > if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Float(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Bool(lhs > rhs as f64)),
             Object::Float(rhs) => Ok(Object::Bool(lhs > rhs)),
             Object::Bool(rhs) if rhs => Ok(Object::Bool(lhs > if rhs { 1f64 } else { 0f64 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Bool(if lhs { 1 } else { 0 } > rhs)),
             Object::Float(rhs) => Ok(Object::Bool(if lhs { 1f64 } else { 0f64 } > rhs)),
             Object::Bool(rhs) => Ok(Object::Bool(if lhs { 1 } else { 0 } > rhs as i64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 
@@ -513,21 +513,21 @@ impl Object {
             Object::Int(rhs) => Ok(Object::Bool(lhs >= rhs)),
             Object::Float(rhs) => Ok(Object::Bool((lhs as f64) >= rhs)),
             Object::Bool(rhs) if rhs => Ok(Object::Bool(lhs >= if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Float(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Bool(lhs >= rhs as f64)),
             Object::Float(rhs) => Ok(Object::Bool(lhs >= rhs)),
             Object::Bool(rhs) if rhs => Ok(Object::Bool(lhs >= if rhs { 1f64 } else { 0f64 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Bool(if lhs { 1 } else { 0 } >= rhs)),
             Object::Float(rhs) => Ok(Object::Bool(if lhs { 1f64 } else { 0f64 } >= rhs)),
             Object::Bool(rhs) => Ok(Object::Bool(if lhs { 1 } else { 0 } >= rhs as i64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 
@@ -544,21 +544,21 @@ impl Object {
             Object::Int(rhs) => Ok(Object::Bool(lhs < rhs)),
             Object::Float(rhs) => Ok(Object::Bool((lhs as f64) < rhs)),
             Object::Bool(rhs) if rhs => Ok(Object::Bool(lhs < if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Float(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Bool(lhs < rhs as f64)),
             Object::Float(rhs) => Ok(Object::Bool(lhs < rhs)),
             Object::Bool(rhs) if rhs => Ok(Object::Bool(lhs < if rhs { 1f64 } else { 0f64 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Bool(if lhs { 1 } else { 0 } < rhs)),
             Object::Float(rhs) => Ok(Object::Bool(if lhs { 1f64 } else { 0f64 } < rhs)),
             Object::Bool(rhs) => Ok(Object::Bool(if lhs { 1 } else { 0 } < rhs as i64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 
@@ -575,21 +575,21 @@ impl Object {
             Object::Int(rhs) => Ok(Object::Bool(lhs <= rhs)),
             Object::Float(rhs) => Ok(Object::Bool((lhs as f64) <= rhs)),
             Object::Bool(rhs) if rhs => Ok(Object::Bool(lhs <= if rhs { 1 } else { 0 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Float(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Bool(lhs <= rhs as f64)),
             Object::Float(rhs) => Ok(Object::Bool(lhs <= rhs)),
             Object::Bool(rhs) if rhs => Ok(Object::Bool(lhs <= if rhs { 1f64 } else { 0f64 })),
-            _ => return error_msg,
+            _ => error_msg,
          },
          Object::Bool(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Bool(if lhs { 1 } else { 0 } <= rhs)),
             Object::Float(rhs) => Ok(Object::Bool(if lhs { 1f64 } else { 0f64 } <= rhs)),
             Object::Bool(rhs) => Ok(Object::Bool(if lhs { 1 } else { 0 } <= rhs as i64)),
-            _ => return error_msg,
+            _ => error_msg,
          },
-         _ => return error_msg,
+         _ => error_msg,
       }
    }
 }

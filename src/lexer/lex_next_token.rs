@@ -27,7 +27,7 @@ impl Lexer {
       }
 
       // Generate symbol-like token tokens
-      return match c {
+      match c {
          '"' | '\'' => self.make_string_token(),
          '(' => self.make_token(L_PAREN),
          ')' => self.make_token(R_PARENTHESIS),
@@ -89,11 +89,7 @@ impl Lexer {
          '?' => {
             if self.matches('?') {
                self.make_token(NULLISH)
-            }
-            // else if self.matches(':') {
-            //     self.make_token(ELVIS_OPERATOR)
-            // }
-            else {
+            } else {
                self.make_token(QUESTION)
             }
          }
@@ -164,6 +160,6 @@ impl Lexer {
 
          // Everything else is an error token
          _ => self.make_error_token("Unexpected character"),
-      };
+      }
    }
 }

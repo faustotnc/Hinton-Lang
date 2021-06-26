@@ -105,7 +105,7 @@ impl<'a> Parser {
          };
       }
 
-      return expr;
+      expr
    }
 
    /// Parses a ternary conditional expression.
@@ -141,7 +141,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses an '??' (nullish coalescing) expression.
@@ -165,7 +165,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses an 'OR' expression.
@@ -189,7 +189,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses an 'AND' expression.
@@ -213,7 +213,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses a 'BITWISE OR' expression.
@@ -237,7 +237,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses a 'BITWISE XOR' expression.
@@ -261,7 +261,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses a 'BITWISE AND' expression.
@@ -285,7 +285,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses an equality expression.
@@ -315,7 +315,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses a comparison expression.
@@ -353,7 +353,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses a range expression.
@@ -377,7 +377,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses a 'BITWISE SHIFT'.
@@ -407,7 +407,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses a term expression.
@@ -437,7 +437,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses a factor expression.
@@ -469,7 +469,7 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses an exponentiation expression.
@@ -493,12 +493,12 @@ impl<'a> Parser {
          }));
       }
 
-      return expr;
+      expr
    }
 
    /// Parses a unary expression.
    fn parse_unary(&mut self) -> Option<ASTNode> {
-      return if self.matches(&LOGIC_NOT) || self.matches(&MINUS) || self.matches(&BIT_NOT) {
+      if self.matches(&LOGIC_NOT) || self.matches(&MINUS) || self.matches(&BIT_NOT) {
          let opr = self.previous.clone();
          let expr = self.parse_unary();
 
@@ -545,7 +545,7 @@ impl<'a> Parser {
          }
 
          expr
-      };
+      }
    }
 
    /// Parses a primary (literal) expression.
@@ -633,10 +633,10 @@ impl<'a> Parser {
          }
       };
 
-      return Some(Literal(LiteralExprNode {
+      Some(Literal(LiteralExprNode {
          value: literal_value,
          token: literal_token,
-      }));
+      }))
    }
 
    /// Compiles a string token to a Hinton String.
@@ -658,7 +658,7 @@ impl<'a> Parser {
          .replace("\\\"", "\"");
 
       // Emits the constant instruction
-      return Object::String(lexeme);
+      Object::String(lexeme)
    }
 
    /// Compiles an integer token to a Hinton Int.
@@ -672,14 +672,14 @@ impl<'a> Parser {
       // Parses the lexeme into a float
       let num = lexeme.parse::<i64>();
 
-      return match num {
+      match num {
          Ok(x) => Ok(Object::Int(x)),
          Err(_) => {
             // The lexeme could not be converted to an i64.
             self.error_at_previous("Unexpected token.");
             Err(())
          }
-      };
+      }
    }
 
    /// Compiles a float token to a Hinton Float.
@@ -693,14 +693,14 @@ impl<'a> Parser {
       // Parses the lexeme into a float
       let num = lexeme.parse::<f64>();
 
-      return match num {
+      match num {
          Ok(x) => Ok(Object::Float(x)),
          Err(_) => {
             // The lexeme could not be converted to a f64.
             self.error_at_previous("Unexpected token.");
             Err(())
          }
-      };
+      }
    }
 
    /// Compiles a binary, octal, or hexadecimal number token to a Hinton Number.
@@ -715,25 +715,25 @@ impl<'a> Parser {
       // Parses the lexeme into an integer
       let num = isize::from_str_radix(&lexeme[2..], radix);
 
-      return match num {
+      match num {
          Ok(x) => Ok(Object::Int(x as i64)),
          Err(_) => {
             // The lexeme could not be converted to an i64.
             self.error_at_previous("Unexpected token.");
             Err(())
          }
-      };
+      }
    }
 
    /// Parses an array expression.
    fn construct_array(&mut self) -> Option<ASTNode> {
       let start_token = self.previous.clone();
-      let mut values: Vec<Box<ASTNode>> = vec![];
+      let mut values: Vec<ASTNode> = vec![];
 
       if !self.matches(&R_BRACKET) {
          loop {
             values.push(match self.parse_expression() {
-               Some(e) => Box::new(e),
+               Some(e) => e,
                None => return None,
             });
 
@@ -747,26 +747,26 @@ impl<'a> Parser {
          }
       }
 
-      return Some(Array(ArrayExprNode {
+      Some(Array(ArrayExprNode {
          values,
          token: start_token,
-      }));
+      }))
    }
 
    /// Parses a tuple literal expression.
    fn parse_tuple(&mut self, start_token: Token, first: Option<ASTNode>) -> Option<ASTNode> {
       let first = match first {
-         Some(node) => Box::new(node),
+         Some(node) => node,
          None => return None, // The first expression is invalid.
       };
 
       // Initialize the vector
-      let mut values: Vec<Box<ASTNode>> = vec![first];
+      let mut values: Vec<ASTNode> = vec![first];
 
       if !self.matches(&R_PARENTHESIS) {
          loop {
             values.push(match self.parse_expression() {
-               Some(e) => Box::new(e),
+               Some(e) => e,
                None => return None,
             });
 
@@ -779,10 +779,10 @@ impl<'a> Parser {
          }
       }
 
-      return Some(Tuple(TupleExprNode {
+      Some(Tuple(TupleExprNode {
          values,
          token: start_token,
-      }));
+      }))
    }
 
    /// Parses a dictionary literal expression.
@@ -828,7 +828,7 @@ impl<'a> Parser {
          }
       }
 
-      return Some(Dictionary(DictionaryExprNode { keys, values, token }));
+      Some(Dictionary(DictionaryExprNode { keys, values, token }))
    }
 
    /// Parses an array indexing expression.
@@ -850,7 +850,7 @@ impl<'a> Parser {
       }));
 
       self.consume(&R_BRACKET, "Expected matching ']' for array indexing expression.");
-      return expr;
+      expr
    }
 
    /// Parses a function call expression.
@@ -872,7 +872,7 @@ impl<'a> Parser {
 
             match self.parse_argument() {
                Some(a) => {
-                  if args.len() > 0 && !a.is_named && args.last().unwrap().is_named {
+                  if !args.is_empty() && !a.is_named && args.last().unwrap().is_named {
                      self.error_at_previous("Named arguments must be declared after all unnamed arguments.");
                      return None;
                   }

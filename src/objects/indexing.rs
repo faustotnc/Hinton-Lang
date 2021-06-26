@@ -49,7 +49,7 @@ fn to_bounded_index(x: &i64, len: usize) -> Option<usize> {
 /// # Returns
 /// - `Result<Object, ObjectOprErrType>`: Returns `Ok(Object)` with a Hinton Object if the index is
 /// within bounds. Returns `Err(ObjectOprErrType)` if there was an error while indexing the array.
-fn index_array(arr: &Vec<Object>, index: &Object) -> Result<Object, ObjectOprErrType> {
+fn index_array(arr: &[Object], index: &Object) -> Result<Object, ObjectOprErrType> {
    match index {
       // Indexing type: Array[Int]
       Object::Int(idx) => {
@@ -77,9 +77,9 @@ fn index_array(arr: &Vec<Object>, index: &Object) -> Result<Object, ObjectOprErr
          )))
       }
    }
-   return Err(ObjectOprErrType::IndexError(String::from(
+   Err(ObjectOprErrType::IndexError(String::from(
       "Array index out of bounds.",
-   )));
+   )))
 }
 
 /// Get the ith object in a Hinton tuple.
@@ -92,7 +92,7 @@ fn index_array(arr: &Vec<Object>, index: &Object) -> Result<Object, ObjectOprErr
 /// # Returns
 /// - `Result<Object, ObjectOprErrType>`: Returns `Ok(Object)` with a Hinton Object if the index is
 /// within bounds. Returns `Err(ObjectOprErrType)` if there was an error while indexing the tuple.
-fn index_tuple(tup: &Vec<Object>, index: &Object) -> Result<Object, ObjectOprErrType> {
+fn index_tuple(tup: &[Object], index: &Object) -> Result<Object, ObjectOprErrType> {
    match index {
       // Indexing type: Tuple[Int]
       Object::Int(idx) => {
@@ -122,9 +122,9 @@ fn index_tuple(tup: &Vec<Object>, index: &Object) -> Result<Object, ObjectOprErr
       }
    }
 
-   return Err(ObjectOprErrType::IndexError(String::from(
+   Err(ObjectOprErrType::IndexError(String::from(
       "Tuple index out of bounds.",
-   )));
+   )))
 }
 
 /// Get the ith character in a Hinton string.
@@ -137,7 +137,7 @@ fn index_tuple(tup: &Vec<Object>, index: &Object) -> Result<Object, ObjectOprErr
 /// # Returns
 /// - `Result<Object, ObjectOprErrType>`: Returns `Ok(Object)` with a Hinton Object if the index is
 /// within bounds. Returns `Err(ObjectOprErrType)` if there was an error while indexing the string.
-fn index_string(str: &String, index: &Object) -> Result<Object, ObjectOprErrType> {
+fn index_string(str: &str, index: &Object) -> Result<Object, ObjectOprErrType> {
    match index {
       // Indexing type: String[Int]
       Object::Int(idx) => {
@@ -170,9 +170,9 @@ fn index_string(str: &String, index: &Object) -> Result<Object, ObjectOprErrType
       }
    }
 
-   return Err(ObjectOprErrType::IndexError(String::from(
+   Err(ObjectOprErrType::IndexError(String::from(
       "String index out of bounds.",
-   )));
+   )))
 }
 
 /// Get the ith object in a Hinton range.
@@ -226,7 +226,7 @@ fn index_range(range: &RangeObject, index: &Object) -> Result<Object, ObjectOprE
       }
    }
 
-   return Err(ObjectOprErrType::IndexError(String::from(
+   Err(ObjectOprErrType::IndexError(String::from(
       "Range index out of bounds.",
-   )));
+   )))
 }

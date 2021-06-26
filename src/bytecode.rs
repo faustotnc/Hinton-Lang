@@ -206,7 +206,7 @@ impl Chunk {
       let b1 = self.instructions[idx];
       let b2 = self.instructions[idx + 1];
 
-      return u16::from_be_bytes([b1, b2]);
+      u16::from_be_bytes([b1, b2])
    }
 
    /// Splits a 16-bit integer into two bytes, and adds each individual byte in sequence into
@@ -225,7 +225,7 @@ impl Chunk {
 
    /// Gets the line info associated with the byte at the given instruction index.
    pub fn get_line_info(&self, idx: usize) -> &(usize, usize) {
-      return &self.locations[idx];
+      &self.locations[idx]
    }
 
    /// Pushes the line info associated with the last byte in the instruction list.
@@ -235,13 +235,13 @@ impl Chunk {
 
    /// Gets the size of the instructions list.
    pub fn len(&self) -> usize {
-      return self.instructions.len();
+      self.instructions.len()
    }
 
    /// Gets the size of the constants pool list.
    #[cfg(test)]
    pub fn get_pool_size(&self) -> usize {
-      return self.constants.len();
+      self.constants.len()
    }
 }
 

@@ -41,7 +41,7 @@ impl ASTNode {
    pub fn is_truthy_literal(&self) -> bool {
       match self {
          ASTNode::Literal(x) => !x.value.is_falsey(),
-         _ => return false,
+         _ => false,
       }
    }
 
@@ -51,7 +51,7 @@ impl ASTNode {
             Object::Bool(y) => !y,
             _ => false,
          },
-         _ => return false,
+         _ => false,
       }
    }
 }
@@ -69,13 +69,13 @@ pub struct LiteralExprNode {
 
 #[derive(Clone)]
 pub struct ArrayExprNode {
-   pub values: Vec<Box<ASTNode>>,
+   pub values: Vec<ASTNode>,
    pub token: Token,
 }
 
 #[derive(Clone)]
 pub struct TupleExprNode {
-   pub values: Vec<Box<ASTNode>>,
+   pub values: Vec<ASTNode>,
    pub token: Token,
 }
 

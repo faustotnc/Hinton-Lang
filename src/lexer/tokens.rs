@@ -141,11 +141,7 @@ impl TokenType {
    /// # Parameters
    /// - `token_type`: The token type to be matched against this token.
    pub fn type_match(&self, token_type: &TokenType) -> bool {
-      if std::mem::discriminant(self) == std::mem::discriminant(token_type) {
-         true
-      } else {
-         false
-      }
+      std::mem::discriminant(self) == std::mem::discriminant(token_type)
    }
 }
 
@@ -157,7 +153,7 @@ impl TokenType {
 /// # Returns
 /// `TokenType`: The type of token matched for given identifier name.
 pub fn make_identifier_type(id: &str) -> TokenType {
-   return match id {
+   match id {
       "and" => TokenType::LOGIC_AND,
       "as" => TokenType::AS_OPERATOR,
       "break" => TokenType::BREAK_KW,
@@ -218,5 +214,5 @@ pub fn make_identifier_type(id: &str) -> TokenType {
       // "struct"     => TokenType::STRUCT_KEYWORD,
       // "yield"      => TokenType::YIELD_KEYWORD,
       _ => TokenType::IDENTIFIER,
-   };
+   }
 }

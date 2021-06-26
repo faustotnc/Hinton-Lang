@@ -44,11 +44,11 @@ impl Lexer {
          return self.make_token(FLOAT);
       }
 
-      return if started_with_dot {
+      if started_with_dot {
          self.make_token(FLOAT)
       } else {
          self.make_token(INTEGER)
-      };
+      }
    }
 
    /// Consumes digit characters of the given radix base.
