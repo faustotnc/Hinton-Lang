@@ -195,14 +195,20 @@ impl VirtualMachine {
       RuntimeResult::Continue
    }
 
-   /// Gets an immutable reference to the object at the provided stack index.
+   /// Gets an immutable reference to the object at the provided stack top offset.
    fn peek_stack(&self, pos: usize) -> &Object {
-      &self.stack[pos]
+      &self.stack[self.stack.len() - 1 - pos]
    }
 
-   /// Gets a mutable reference to the object at the provided stack index.
+   /// Gets a mutable reference to the object at the provided stack top offset.
    fn peek_stack_mut(&mut self, pos: usize) -> &mut Object {
-      &mut self.stack[pos]
+      let stack_size = self.stack.len();
+      &mut self.stack[stack_size - 1 - pos]
+   }
+
+   /// Gets an immutable reference to the object at the provided stack index.
+   fn peek_stack_abs(&self, pos: usize) -> &Object {
+      &self.stack[pos]
    }
 
    /// Gets an UpValue from the UpValues list.
@@ -234,6 +240,10 @@ impl VirtualMachine {
       return match callee {
          Object::Function(obj) => self.call_function(obj, arg_count),
          Object::Closure(obj) => self.call_closure(obj, arg_count),
+         Object::BoundMethod(obj) => {
+            *self.peek_stack_mut(arg_count as usize) = Object::Instance(obj.receiver);
+            self.call_closure(obj.method, arg_count)
+         }
          Object::Native(obj) => {
             let mut args: Vec<Object> = vec![];
             for _ in 0..arg_count {
@@ -363,23 +373,18 @@ impl VirtualMachine {
    /// Tries to create a class instance with the given object, or returns a runtime error if the
    /// object is not instantiable.
    fn create_instance(&mut self, callee: Object, arg_count: u8) -> RuntimeResult {
-      let inst = Rc::new(RefCell::new(InstanceObject {
-         class: match callee {
-            Object::Class(c) => c,
-            _ => {
-               return RuntimeResult::Error {
-                  error: RuntimeErrorType::InstanceError,
-                  message: format!(
-                     "Cannot create an instance from an object of type '{}'.",
-                     callee.type_name()
-                  ),
-               }
+      let class = match callee {
+         Object::Class(c) => c,
+         _ => {
+            return RuntimeResult::Error {
+               error: RuntimeErrorType::InstanceError,
+               message: format!("Cannot instantiate an object of type '{}'.", callee.type_name()),
             }
-         },
-         fields: HashMap::new(),
-      }));
+         }
+      };
 
-      let new_instance = Object::Instance(inst);
+      let members = class.members.borrow_mut().clone();
+      let new_instance = Object::Instance(Rc::new(RefCell::new(InstanceObject { class, members })));
 
       let class_pos = self.stack.len() - (arg_count as usize) - 1;
       self.stack[class_pos] = new_instance;

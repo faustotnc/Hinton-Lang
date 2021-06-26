@@ -2,7 +2,7 @@ use crate::errors::RuntimeErrorType;
 use crate::objects::{IterObject, NativeFuncObj, Object};
 use crate::virtual_machine::RuntimeResult;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{hash_map, HashMap};
 use std::io;
 use std::rc::Rc;
 use std::time::SystemTime;
@@ -29,7 +29,7 @@ impl Default for Natives {
       natives.add_native_function("print", 1, 1, native_print as NativeFn);
       // <<<<<<<<<<<<<<<< Native functions to be added before this line
 
-      return natives;
+      natives
    }
 }
 
@@ -38,15 +38,15 @@ impl Natives {
    fn add_native_function(&mut self, name: &str, min_arity: u8, max_arity: u8, body: NativeFn) {
       let name = String::from(name);
 
-      if !self.0.contains_key(&name) {
+      if let hash_map::Entry::Vacant(e) = self.0.entry(name.clone()) {
          let f = NativeFuncObj {
-            name: name.clone(),
+            name,
             min_arity,
             max_arity,
-            function: body,
+            body,
          };
 
-         self.0.insert(name.clone(), f);
+         e.insert(f);
       } else {
          panic!("Cannot duplicate native function '{}'.", name);
       }
@@ -76,11 +76,8 @@ impl Natives {
                };
             }
 
-            // Calls the native function
-            let call_result = (f.function)(args);
-
-            // Returns the result of the call
-            return call_result;
+            // Calls the native function, and returns its result
+            (f.body)(args)
          }
          None => Err(RuntimeResult::Error {
             error: RuntimeErrorType::ReferenceError,
@@ -104,7 +101,7 @@ impl Natives {
 
    /// Obtains a list of the names of the native functions
    pub fn get_names(&self) -> Vec<String> {
-      self.0.keys().map(|x| x.clone()).collect()
+      self.0.keys().cloned().collect()
    }
 }
 
@@ -137,12 +134,12 @@ fn native_clock(_: Vec<Object>) -> Result<Object, RuntimeResult> {
 }
 
 /// Implements the `iter(...)` native function for Hinton, which
-/// converts the give object to an iterable.
+/// converts the give object to an iterable object.
 fn native_iter(args: Vec<Object>) -> Result<Object, RuntimeResult> {
    make_iter(args[0].clone())
 }
 
-/// Converts a Hinton object into an Iterable.
+/// Converts a Hinton object into an Iterable object.
 pub fn make_iter(o: Object) -> Result<Object, RuntimeResult> {
    match o {
       Object::String(_) => {}
@@ -160,10 +157,10 @@ pub fn make_iter(o: Object) -> Result<Object, RuntimeResult> {
       }
    };
 
-   return Ok(Object::Iter(Rc::new(RefCell::new(IterObject {
+   Ok(Object::Iter(Rc::new(RefCell::new(IterObject {
       iter: Box::new(o),
       index: 0,
-   }))));
+   }))))
 }
 
 /// Implements the `next(...)` native function for Hinton, which
@@ -199,7 +196,7 @@ pub fn get_next_in_iter(o: &Rc<RefCell<IterObject>>) -> Result<Object, RuntimeRe
    // Increment to the next position of the iterator.
    iter.index += 1;
 
-   return Ok(obj);
+   Ok(obj)
 }
 
 /// Implements the `input(...)` native function for Hinton, which

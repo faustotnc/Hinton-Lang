@@ -211,7 +211,7 @@ impl Parser {
          }
 
          match self.get_current_tok_type() {
-            CLASS_KW | FUNC_KW | LET_KW | FOR_KW | IF_KW | WHILE_KW | RETURN_KW => {
+            CLASS_KW | FUNC_KW | VAR_KW | FOR_KW | IF_KW | WHILE_KW | RETURN_KW => {
                return;
             }
 

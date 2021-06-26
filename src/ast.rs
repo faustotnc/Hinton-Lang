@@ -270,6 +270,9 @@ pub struct ReturnStmtNode {
 #[derive(Clone)]
 pub struct ClassDeclNode {
    pub name: Token,
+   pub methods: Vec<FunctionDeclNode>,
+   pub var_fields: Vec<VariableDeclNode>,
+   pub const_fields: Vec<ConstantDeclNode>,
 }
 
 #[derive(Clone)]

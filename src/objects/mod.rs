@@ -52,7 +52,7 @@ pub struct NativeFuncObj {
    pub name: String,
    pub min_arity: u8,
    pub max_arity: u8,
-   pub function: NativeFn,
+   pub body: NativeFn,
 }
 
 /// Represents a Hinton closure object.
@@ -73,8 +73,8 @@ impl UpValRef {
    /// Checks that the UpValue is open and points to the given stack index.
    pub fn is_open_at(&self, index: usize) -> bool {
       match self {
-         &UpValRef::Closed(_) => false,
-         &UpValRef::Open(i) => i == index,
+         UpValRef::Closed(_) => false,
+         UpValRef::Open(i) => *i == index,
       }
    }
 }
@@ -83,13 +83,21 @@ impl UpValRef {
 #[derive(Clone)]
 pub struct ClassObject {
    pub name: String,
+   pub members: Rc<RefCell<HashMap<String, Object>>>,
 }
 
 /// Represents a Hinton Instance object.
 #[derive(Clone)]
 pub struct InstanceObject {
    pub class: ClassObject,
-   pub fields: HashMap<String, Object>,
+   pub members: HashMap<String, Object>,
+}
+
+/// Represents a Hinton bound method.
+#[derive(Clone)]
+pub struct BoundMethod {
+   pub receiver: Rc<RefCell<InstanceObject>>,
+   pub method: ClosureObject,
 }
 
 /// All types of objects in Hinton
@@ -104,16 +112,15 @@ pub enum Object {
 
    // Heap-allocated
    Array(Rc<RefCell<Vec<Object>>>),
+   BoundMethod(BoundMethod),
+   Closure(ClosureObject),
    Dict(Rc<RefCell<HashMap<String, Object>>>),
    Function(Rc<RefCell<FuncObject>>),
    Instance(Rc<RefCell<InstanceObject>>),
    Iter(Rc<RefCell<IterObject>>),
-   String(String),
-   Tuple(Box<Vec<Object>>),
-
-   // Internal
-   Closure(ClosureObject),
    Native(Box<NativeFuncObj>),
+   String(String),
+   Tuple(Vec<Object>),
 }
 
 impl Object {
@@ -124,7 +131,9 @@ impl Object {
          Self::Bool(_) => String::from("Bool"),
          Self::Dict(_) => String::from("Dict"),
          Self::Float(_) => String::from("Float"),
-         Self::Function(_) | Self::Native(_) | &Self::Closure(_) => String::from("Function"),
+         Self::Function(_) | Self::Native(_) | Self::Closure(_) | Self::BoundMethod(_) => {
+            String::from("Function")
+         }
          Self::Int(_) => String::from("Int"),
          Self::Iter(_) => String::from("Iter"),
          Self::Null => String::from("Null"),
@@ -138,34 +147,22 @@ impl Object {
 
    /// Checks that this object is a Hinton integer.
    pub fn is_int(&self) -> bool {
-      match self {
-         Object::Int(_) => true,
-         _ => false,
-      }
+      matches!(self, Object::Int(_))
    }
 
    /// Checks that this object is a Hinton float.
    pub fn is_float(&self) -> bool {
-      match self {
-         Object::Float(_) => true,
-         _ => false,
-      }
+      matches!(self, Object::Float(_))
    }
 
    /// Checks that this object is a Hinton boolean.
    pub fn is_bool(&self) -> bool {
-      match self {
-         Object::Bool(_) => true,
-         _ => false,
-      }
+      matches!(self, Object::Bool(_))
    }
 
    /// Checks that this object is a Hinton null.
    pub fn is_null(&self) -> bool {
-      match self {
-         Object::Null => true,
-         _ => false,
-      }
+      matches!(self, Object::Null)
    }
 
    /// Checks that this object is falsey.
@@ -235,7 +232,7 @@ impl Object {
    }
 
    /// Tries to convert this object to a Rust vector of Hinton objects (tuple).
-   pub fn as_tuple(&self) -> Option<&Box<Vec<Object>>> {
+   pub fn as_tuple(&self) -> Option<&Vec<Object>> {
       match self {
          Object::Tuple(v) => Some(v),
          _ => None,
@@ -260,14 +257,14 @@ impl Object {
          Object::Int(i) => {
             return match right {
                Object::Int(x) if i == x => true,
-               Object::Float(x) if (x - i.clone() as f64) == 0f64 => true,
+               Object::Float(x) if (x - *i as f64) == 0f64 => true,
                Object::Bool(x) if (i == &0i64 && !*x) || (i == &1i64 && *x) => true,
                _ => false,
             }
          }
          Object::Float(f) => {
             return match right {
-               Object::Int(x) if (f - x.clone() as f64) == 0f64 => true,
+               Object::Int(x) if (f - *x as f64) == 0f64 => true,
                Object::Float(x) if f == x => true,
                Object::Bool(x) if (f == &0f64 && !*x) || (f == &1f64 && *x) => true,
                _ => false,
@@ -340,12 +337,7 @@ impl Object {
             // then they are equal in value.
             a.min == b.min && a.max == b.max
          }
-         Object::Null => {
-            return match right {
-               Object::Null => true,
-               _ => false,
-            }
-         }
+         Object::Null => return matches!(right, Object::Null),
          _ => false,
       };
    }
@@ -419,7 +411,7 @@ impl<'a> fmt::Display for Object {
          Object::Function(ref inner) => {
             let name = &inner.borrow_mut().name;
 
-            let str = if name == "" {
+            let str = if name.is_empty() {
                String::from("<script>")
             } else {
                format!("<Func '{}'>", name)
@@ -430,7 +422,18 @@ impl<'a> fmt::Display for Object {
          Object::Closure(ref inner) => {
             let name = &inner.function.borrow().name;
 
-            let str = if name == "" {
+            let str = if name.is_empty() {
+               String::from("<Func script>")
+            } else {
+               format!("<Func '{}'>", name)
+            };
+
+            fmt::Display::fmt(&str, f)
+         }
+         Object::BoundMethod(ref inner) => {
+            let name = &inner.method.function.borrow().name;
+
+            let str = if name.is_empty() {
                String::from("<Func script>")
             } else {
                format!("<Func '{}'>", name)

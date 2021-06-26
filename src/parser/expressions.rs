@@ -605,12 +605,10 @@ impl<'a> Parser {
          L_CURLY => {
             return self.parse_dictionary();
          }
-         IDENTIFIER => {
-            // For identifier expressions, the only information we need is enclosed within the token.
-            // So we return the token wrapped inside an ASTNode::Identifier.
+         IDENTIFIER | SELF_KW => {
             return Some(Identifier(IdentifierExprNode {
                token: self.previous.clone(),
-            }));
+            }))
          }
          NEW_KW => {
             // For class instances, we parse a unary after the "new" keyword so that the instance can

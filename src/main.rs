@@ -76,7 +76,7 @@ fn main() {
 ///
 /// # Parameters
 /// - `filename`: The path to the file to run.
-fn run_file(filename: &String) {
+fn run_file(filename: &str) {
    let filepath = match fs::canonicalize(filename) {
       Ok(path) => path,
       Err(error) => {

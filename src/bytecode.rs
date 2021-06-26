@@ -47,6 +47,7 @@ pub enum OpCode {
    PopStackTop,
    Return,
    Subtract,
+   BindMethod,
 
    // Instructions with one chunk operands.
    // These instructions use the next byte
@@ -282,13 +283,11 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
 
       // Prints a line number or a vertical bar indicating that the
       // current instruction is in the same line as the previous one.
-      if let Some(location) = line_info {
-         if location.0 != current_line {
-            print!("{:>05}\t", location.0);
-            current_line = location.0;
-         } else {
-            print!("  |\t")
-         }
+      if line_info.0 != current_line {
+         print!("{:>05}\t", line_info.0);
+         current_line = line_info.0;
+      } else {
+         print!("  |\t")
       }
 
       // Prints the index of the current instruction
@@ -322,6 +321,7 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
 
       match FromPrimitive::from_u8(code).unwrap() {
          OpCode::Add => op_code_name = "ADD",
+         OpCode::BindMethod => op_code_name = "BIND_METHOD",
          OpCode::BitwiseAnd => op_code_name = "BIT_AND",
          OpCode::BitwiseNot => op_code_name = "BIT_NOT",
          OpCode::BitwiseOr => op_code_name = "BIT_OR",
@@ -329,6 +329,7 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
          OpCode::BitwiseShiftRight => op_code_name = "BIT_SHIFT_R",
          OpCode::BitwiseXor => op_code_name = "BIT_XOR",
          OpCode::Divide => op_code_name = "DIVIDE",
+         OpCode::EndVirtualMachine => op_code_name = "END_VIRTUAL_MACHINE",
          OpCode::Equals => op_code_name = "EQUALS",
          OpCode::Expo => op_code_name = "EXPO",
          OpCode::GreaterThan => op_code_name = "GREATER_THAN",
@@ -351,11 +352,10 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
          OpCode::Negate => op_code_name = "NEGATE",
          OpCode::NotEq => op_code_name = "NOT_EQ",
          OpCode::NullishCoalescing => op_code_name = "NULLISH",
-         OpCode::PopStackTop => op_code_name = "POP_STACK_TOP",
-         OpCode::Subtract => op_code_name = "SUBTRACT",
          OpCode::PopCloseUpVal => op_code_name = "POP_CLOSE_UP_VAL",
-         OpCode::EndVirtualMachine => op_code_name = "END_VIRTUAL_MACHINE",
+         OpCode::PopStackTop => op_code_name = "POP_STACK_TOP",
          OpCode::Return => op_code_name = "RETURN",
+         OpCode::Subtract => op_code_name = "SUBTRACT",
 
          // OpCodes with 1 operand
          OpCode::BindDefaults => {

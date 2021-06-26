@@ -3,11 +3,11 @@ use super::UpValue;
 /// Types of symbols available in Hinton.
 #[derive(Clone)]
 pub enum SymbolType {
-   Variable,
-   Constant,
-   Function,
+   Var,
+   Const,
+   Func,
    Class,
-   Parameter,
+   Param,
 }
 
 /// Represents a symbol found in a particular scope.
@@ -81,9 +81,9 @@ impl SymbolTable {
    }
 
    /// Looks for a symbol with the given name in the specified scope.
-   pub fn lookup(&self, name: &String, scope: usize) -> Option<&Symbol> {
+   pub fn lookup(&self, name: &str, scope: usize) -> Option<&Symbol> {
       for symbol in self.symbols.iter().filter(|s| s.depth == scope) {
-         if &symbol.name == name {
+         if symbol.name == name {
             return Some(symbol);
          }
       }
@@ -102,9 +102,9 @@ impl SymbolTable {
    /// # Returns
    /// `Option<(Symbol, usize)>`: The resolved symbol and its position in the symbol
    /// table if the symbol was found.
-   pub fn resolve(&mut self, name: &String, used: bool, captured: Option<bool>) -> Option<(Symbol, usize)> {
+   pub fn resolve(&mut self, name: &str, used: bool, captured: Option<bool>) -> Option<(Symbol, usize)> {
       for (idx, symbol) in self.symbols.iter_mut().enumerate().rev() {
-         if &symbol.name == name {
+         if symbol.name == name {
             if used {
                symbol.is_used = true;
             }

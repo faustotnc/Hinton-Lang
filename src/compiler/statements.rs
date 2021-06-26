@@ -1,7 +1,7 @@
 use crate::ast::*;
 use crate::bytecode::OpCode;
 use crate::compiler::symbols::{Symbol, SymbolType};
-use crate::compiler::Compiler;
+use crate::compiler::{Compiler, CompilerCtx};
 use crate::errors::CompilerErrorType;
 use crate::lexer::tokens::Token;
 use crate::objects::Object;
@@ -17,7 +17,7 @@ impl Compiler {
    /// Compiles a variable declaration.
    pub(super) fn compile_variable_decl(&mut self, decl: &VariableDeclNode) {
       for id in decl.identifiers.iter() {
-         if let Ok(symbol_pos) = self.declare_symbol(id, SymbolType::Variable) {
+         if let Ok(symbol_pos) = self.declare_symbol(id, SymbolType::Var) {
             self.compile_node(&decl.value);
 
             if self.is_global_scope() {
@@ -32,7 +32,7 @@ impl Compiler {
 
    /// Compiles a constant declaration.
    pub(super) fn compile_constant_decl(&mut self, decl: &ConstantDeclNode) {
-      if let Ok(_) = self.declare_symbol(&decl.name, SymbolType::Constant) {
+      if self.declare_symbol(&decl.name, SymbolType::Const).is_ok() {
          self.compile_node(&decl.value);
 
          if self.is_global_scope() {
@@ -68,13 +68,13 @@ impl Compiler {
 
       if let Some(symbol) = self.current_func_scope_mut().s_table.lookup(&token.lexeme, depth) {
          match symbol.s_type {
-            SymbolType::Variable | SymbolType::Constant | SymbolType::Function | SymbolType::Class => self
+            SymbolType::Var | SymbolType::Const | SymbolType::Func | SymbolType::Class => self
                .error_at_token(
                   &token,
                   CompilerErrorType::Duplication,
                   &format!("Duplicate definition for identifier '{}'", token.lexeme),
                ),
-            SymbolType::Parameter => self.error_at_token(
+            SymbolType::Param => self.error_at_token(
                &token,
                CompilerErrorType::Duplication,
                &format!("Duplicate definition for parameter '{}'", token.lexeme),
@@ -101,10 +101,7 @@ impl Compiler {
       let symbol = Symbol {
          name: name.to_string(),
          depth: self.relative_scope_depth(),
-         is_initialized: match st {
-            SymbolType::Variable | SymbolType::Constant | SymbolType::Function => false,
-            _ => true,
-         },
+         is_initialized: !matches!(st, SymbolType::Var | SymbolType::Const | SymbolType::Func),
          s_type: st,
          is_used: false,
          line_info: (token.line_num, token.column_start),
@@ -235,21 +232,32 @@ impl Compiler {
 
    /// Compiles a class declaration statement.
    pub(super) fn compile_class_declaration(&mut self, decl: &ClassDeclNode) {
-      if let Ok(_) = self.declare_symbol(&decl.name, SymbolType::Class) {
+      if self.declare_symbol(&decl.name, SymbolType::Class).is_ok() {
          let str_name = Object::String(decl.name.lexeme.clone());
          let name_line_info = (decl.name.line_num, decl.name.column_start);
 
          if let Some(name_pool_pos) = self.add_literal_to_pool(str_name, &decl.name, false) {
+            // Make the class object at runtime.
             if name_pool_pos < 256 {
                self.emit_op_code_with_byte(OpCode::MakeClass, name_pool_pos as u8, name_line_info)
             } else {
                self.emit_op_code_with_short(OpCode::MakeClass, name_pool_pos, name_line_info)
             }
 
+            // Emits the class methods
+            self.emit_methods(&decl.methods);
+
+            // Define the class as a global symbol if we are in the global scope.
             if self.is_global_scope() {
                self.define_as_global(&decl.name);
             }
          }
+      }
+   }
+
+   fn emit_methods(&mut self, methods: &[FunctionDeclNode]) {
+      for m in methods {
+         self.compile_function_decl(m, CompilerCtx::Method);
       }
    }
 }

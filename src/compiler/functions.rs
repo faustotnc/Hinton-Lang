@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::bytecode;
 use crate::bytecode::OpCode;
 use crate::compiler::symbols::{Symbol, SymbolTable, SymbolType};
-use crate::compiler::{Compiler, CompilerType, FunctionScope, UpValue};
+use crate::compiler::{Compiler, CompilerCtx, FunctionScope, UpValue};
 use crate::errors::CompilerErrorType;
 use crate::lexer::tokens::Token;
 use crate::objects::{FuncObject, Object};
@@ -11,21 +11,32 @@ use std::rc::Rc;
 
 impl Compiler {
    /// Compiles a function declaration statement.
-   pub(super) fn compile_function_decl(&mut self, decl: &FunctionDeclNode) {
-      if let Ok(parent_symbol_pos) = self.declare_symbol(&decl.name, SymbolType::Function) {
+   pub(super) fn compile_function_decl(&mut self, decl: &FunctionDeclNode, t: CompilerCtx) {
+      if let Ok(parent_symbol_pos) = self.declare_symbol(&decl.name, SymbolType::Func) {
          let func_pos = (decl.name.line_num, decl.name.column_start);
-         let prev_compiler_type = std::mem::replace(&mut self.compiler_type, CompilerType::Function);
+         let prev_compiler_type = std::mem::replace(&mut self.compiler_type, t.clone());
 
          // The first element in a symbol table is always the symbol representing
-         // the function to which the symbol table belongs.
-         let symbols = SymbolTable::new(vec![Symbol {
-            name: decl.name.lexeme.clone(),
-            s_type: SymbolType::Function,
-            is_initialized: true,
-            depth: 0,
-            is_used: true,
-            line_info: func_pos,
-            is_captured: false,
+         // the function to which the symbol table belongs, or the `self` variable.
+         let symbols = SymbolTable::new(vec![match t {
+            CompilerCtx::Method => Symbol {
+               name: String::from("self"),
+               s_type: SymbolType::Class,
+               is_initialized: true,
+               depth: 0,
+               is_used: true,
+               line_info: func_pos,
+               is_captured: false,
+            },
+            _ => Symbol {
+               name: decl.name.lexeme.clone(),
+               s_type: SymbolType::Func,
+               is_initialized: true,
+               depth: 0,
+               is_used: true,
+               line_info: func_pos,
+               is_captured: false,
+            },
          }]);
 
          // Make this function declaration the current function scope.
@@ -52,7 +63,7 @@ impl Compiler {
          self.compile_parameters(&decl.params);
 
          // Compile the function's body
-         if decl.body.len() == 0 {
+         if decl.body.is_empty() {
             self.emit_return(&None, func_pos)
          } else {
             for (index, node) in decl.body.iter().enumerate() {
@@ -60,8 +71,8 @@ impl Compiler {
 
                // Emit an implicit `return` if the body does not end with a return.
                if index == decl.body.len() - 1 {
-                  match node {
-                     &ASTNode::ReturnStmt(_) => {}
+                  match *node {
+                     ASTNode::ReturnStmt(_) => {}
                      _ => self.emit_return(&None, func_pos),
                   }
                };
@@ -97,12 +108,15 @@ impl Compiler {
             self.bind_default_params(decl);
          }
 
-         // If we are in the global scope, declarations get stored in the VM.globals hashmap.
+         if let CompilerCtx::Method = t {
+            self.emit_bind_class_method(&decl);
+            return;
+         }
+
          if self.is_global_scope() {
             self.define_as_global(&decl.name);
             self.globals.mark_initialized(parent_symbol_pos);
          } else {
-            // Marks the variables as initialized, that is, defines the variables.
             self
                .current_func_scope_mut()
                .s_table
@@ -124,7 +138,7 @@ impl Compiler {
 
       // If the function does not close over any values, then there is
       // no need to create a closure object at runtime.
-      if up_values.len() == 0 {
+      if up_values.is_empty() {
          self.add_literal_to_pool(func, token, true);
          return;
       }
@@ -134,18 +148,16 @@ impl Compiler {
          if idx < 256 {
             if up_values.len() < 256 {
                self.emit_op_code_with_byte(OpCode::MakeClosure, idx as u8, func_pos);
-               self.emit_up_values(&up_values, func_pos);
             } else {
                self.emit_op_code_with_byte(OpCode::MakeClosureLarge, idx as u8, func_pos);
-               self.emit_up_values(&up_values, func_pos);
             }
          } else if up_values.len() < 256 {
             self.emit_op_code_with_short(OpCode::MakeClosureLong, idx, func_pos);
-            self.emit_up_values(&up_values, func_pos);
          } else {
             self.emit_op_code_with_short(OpCode::MakeClosureLongLarge, idx, func_pos);
-            self.emit_up_values(&up_values, func_pos);
          }
+
+         self.emit_up_values(&up_values, func_pos);
       }
    }
 
@@ -154,7 +166,7 @@ impl Compiler {
    /// # Parameters
    /// - `up_values`: The UpValues to be composed at runtime.
    /// - `func_pos`: The source position of the function declaration.
-   fn emit_up_values(&mut self, up_values: &Vec<UpValue>, func_pos: (usize, usize)) {
+   fn emit_up_values(&mut self, up_values: &[UpValue], func_pos: (usize, usize)) {
       for up in up_values {
          // Emit the byte that the determines whether this up_value captures a local
          // variable or another up_value in the parent function.
@@ -167,6 +179,11 @@ impl Compiler {
             self.emit_raw_short(up.index as u16, func_pos);
          }
       }
+   }
+
+   fn emit_bind_class_method(&mut self, decl: &FunctionDeclNode) {
+      self.emit_op_code(OpCode::BindMethod, (decl.name.line_num, decl.name.column_start));
+      // TODO: The function must be marked as initialized in the class's symbol table
    }
 
    /// Emits bytecode to bind the default values for the named parameters of a function.
@@ -202,9 +219,9 @@ impl Compiler {
    }
 
    /// Compiles the parameter declaration statements of a function.
-   pub(super) fn compile_parameters(&mut self, params: &Vec<Parameter>) {
+   pub(super) fn compile_parameters(&mut self, params: &[Parameter]) {
       for param in params.iter() {
-         match self.declare_symbol(&param.name, SymbolType::Parameter) {
+         match self.declare_symbol(&param.name, SymbolType::Param) {
             // Do nothing after the parameter has been declared. Default
             // values will be compiled by the function's parent scope.
             Ok(_) => {}
@@ -218,7 +235,7 @@ impl Compiler {
 
    /// Compiles a return statement.
    pub(super) fn compile_return_stmt(&mut self, stmt: &ReturnStmtNode) {
-      if let CompilerType::Script = self.compiler_type {
+      if let CompilerCtx::Script = self.compiler_type {
          self.error_at_token(
             &stmt.token,
             CompilerErrorType::Syntax,

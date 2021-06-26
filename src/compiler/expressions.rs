@@ -384,7 +384,7 @@ impl Compiler {
       // Compile the key-value pairs and leave them on the stack
       for (key, value) in expr.keys.iter().zip(expr.values.iter()) {
          // Get the key name from the token
-         let name = if key.lexeme.starts_with("\"") {
+         let name = if key.lexeme.starts_with('\"') {
             let lexeme = key.lexeme.clone();
 
             // Remove outer quotes from the source string

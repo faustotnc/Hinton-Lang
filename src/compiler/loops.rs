@@ -67,7 +67,7 @@ impl Compiler {
       match self.emit_symbol(
          &format!("<for-loop at #{}>", loop_start),
          &stmt.token,
-         SymbolType::Constant,
+         SymbolType::Const,
       ) {
          Ok(symbol_pos) => self.current_func_scope_mut().s_table.mark_initialized(symbol_pos),
          Err(_) => return,
@@ -86,7 +86,7 @@ impl Compiler {
       });
 
       // Declares the loop's identifier.
-      match self.declare_symbol(&stmt.id.token, SymbolType::Variable) {
+      match self.declare_symbol(&stmt.id.token, SymbolType::Var) {
          Ok(symbol_pos) => self.current_func_scope_mut().s_table.mark_initialized(symbol_pos),
          Err(_) => return,
       }
@@ -116,7 +116,7 @@ impl Compiler {
 
    /// Compiles a `break` statement.
    pub(super) fn compile_loop_branching_stmt(&mut self, stmt: &LoopBranchStmtNode) {
-      if self.current_function_scope().loops.len() == 0 {
+      if self.current_function_scope().loops.is_empty() {
          self.error_at_token(
             &stmt.token,
             CompilerErrorType::Syntax,

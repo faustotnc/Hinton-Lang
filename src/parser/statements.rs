@@ -1,20 +1,29 @@
 use crate::ast::ASTNode;
 use crate::ast::ASTNode::*;
 use crate::ast::*;
-use crate::lexer::tokens::Token;
 use crate::lexer::tokens::TokenType::*;
+use crate::lexer::tokens::{Token, TokenType};
 use crate::objects::Object;
 use crate::parser::Parser;
 
 impl Parser {
    /// Parses a declaration.
    pub(super) fn parse_declaration(&mut self) -> Option<ASTNode> {
-      let decl = if self.matches(&LET_KW) {
-         self.parse_var_declaration()
+      let decl = if self.matches(&VAR_KW) {
+         match self.parse_var_declaration() {
+            Some(decl) => Some(VariableDecl(decl)),
+            None => None,
+         }
       } else if self.matches(&CONST_KW) {
-         self.parse_const_declaration()
+         match self.parse_const_declaration() {
+            Some(decl) => Some(ConstantDecl(decl)),
+            None => None,
+         }
       } else if self.matches(&FUNC_KW) {
-         self.parse_func_declaration()
+         match self.parse_func_declaration() {
+            Some(decl) => Some(FunctionDecl(decl)),
+            None => None,
+         }
       } else if self.matches(&CLASS_KW) {
          self.parse_class_declaration()
       } else {
@@ -98,7 +107,7 @@ impl Parser {
    }
 
    /// Parses a variable declaration.
-   fn parse_var_declaration(&mut self) -> Option<ASTNode> {
+   fn parse_var_declaration(&mut self) -> Option<VariableDeclNode> {
       let mut declarations: Vec<Token> = Vec::new();
 
       // Gets at least one variable name, or a list of
@@ -137,14 +146,14 @@ impl Parser {
          self.advance();
       }
 
-      return Some(ASTNode::VariableDecl(VariableDeclNode {
+      return Some(VariableDeclNode {
          identifiers: declarations,
          value: Box::new(initializer.clone()),
-      }));
+      });
    }
 
    /// Parses a constant declaration.
-   fn parse_const_declaration(&mut self) -> Option<ASTNode> {
+   fn parse_const_declaration(&mut self) -> Option<ConstantDeclNode> {
       self.consume(&IDENTIFIER, "Expected a name for the constant declaration.");
 
       let name = self.previous.clone();
@@ -167,10 +176,10 @@ impl Parser {
          self.advance();
       }
 
-      return Some(ASTNode::ConstantDecl(ConstantDeclNode {
+      return Some(ConstantDeclNode {
          name,
          value: Box::new(initializer.clone()),
-      }));
+      });
    }
 
    /// Parses an `if` statement.
@@ -260,7 +269,7 @@ impl Parser {
       // For-loops must have either the `let` or `await` keyword before the loop's variable, but
       // not both. Here, in the future, we would check which keyword it is and define the type
       // of for-loop we are parsing based on which keyword is present.
-      self.consume(&LET_KW, "Expected the 'let' keyword before the identifier.");
+      self.consume(&VAR_KW, "Expected the 'let' keyword before the identifier.");
 
       let id = match self.parse_primary() {
          Some(val) => match val {
@@ -315,7 +324,7 @@ impl Parser {
    }
 
    /// Parses a function declaration.
-   fn parse_func_declaration(&mut self) -> Option<ASTNode> {
+   fn parse_func_declaration(&mut self) -> Option<FunctionDeclNode> {
       self.consume(
          &IDENTIFIER,
          "Expected an identifier for the function declaration.",
@@ -364,7 +373,7 @@ impl Parser {
 
       self.consume(&L_CURLY, "Expected '{' for the function body.");
 
-      return Some(FunctionDecl(FunctionDeclNode {
+      return Some(FunctionDeclNode {
          name,
          params,
          arity: (min_arity, max_arity),
@@ -375,7 +384,7 @@ impl Parser {
             },
             None => return None,
          },
-      }));
+      });
    }
 
    /// Parses a parameter declaration.
@@ -442,8 +451,41 @@ impl Parser {
       let name = self.previous.clone();
 
       self.consume(&L_CURLY, "Expected '{' for the class body.");
-      self.consume(&R_CURLY, "Expected a matching '}' for the class declaration.");
+      let mut methods: Vec<FunctionDeclNode> = vec![];
+      let mut var_fields: Vec<VariableDeclNode> = vec![];
+      let mut const_fields: Vec<ConstantDeclNode> = vec![];
 
-      return Some(ClassDecl(ClassDeclNode { name }));
+      while !self.matches(&TokenType::R_CURLY) {
+         if self.matches(&FUNC_KW) {
+            match self.parse_func_declaration() {
+               Some(decl) => methods.push(decl),
+               None => return None, // Could not parse method
+            }
+         } else if self.matches(&VAR_KW) {
+            match self.parse_var_declaration() {
+               Some(decl) => var_fields.push(decl),
+               None => return None, // Could not parse variable field
+            }
+         } else if self.matches(&CONST_KW) {
+            match self.parse_const_declaration() {
+               Some(decl) => const_fields.push(decl),
+               None => return None, // Could not parse constant field
+            }
+         } else {
+            if self.check(&EOF) {
+               self.error_at_current("Unexpected end of file while parsing class body.")
+            } else {
+               self.error_at_current("Unexpected token.");
+            }
+            return None;
+         };
+      }
+
+      return Some(ClassDecl(ClassDeclNode {
+         name,
+         methods,
+         var_fields,
+         const_fields,
+      }));
    }
 }

@@ -60,7 +60,6 @@ pub enum TokenType {
    IN_KW,
    LESS_THAN,
    LESS_THAN_EQ,
-   LET_KW,
    LOGIC_AND,
    LOGIC_EQ,
    LOGIC_NOT,
@@ -97,6 +96,7 @@ pub enum TokenType {
    SUPER_KW,
    THIN_ARROW,
    TRUE,
+   VAR_KW,
    WHILE_KW,
 
    // ***** To be implemented/considered
@@ -173,7 +173,6 @@ pub fn make_identifier_type(id: &str) -> TokenType {
       "func" => TokenType::FUNC_KW,
       "if" => TokenType::IF_KW,
       "in" => TokenType::IN_KW,
-      "let" => TokenType::LET_KW,
       "mod" => TokenType::MODULUS,
       "new" => TokenType::NEW_KW,
       "not" => TokenType::LOGIC_NOT,
@@ -185,6 +184,7 @@ pub fn make_identifier_type(id: &str) -> TokenType {
       "self" => TokenType::SELF_KW,
       "super" => TokenType::SUPER_KW,
       "true" => TokenType::TRUE,
+      "var" => TokenType::VAR_KW,
       "while" => TokenType::WHILE_KW,
 
       // ***** To be implemented/considered

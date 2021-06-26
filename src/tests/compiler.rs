@@ -69,7 +69,7 @@ fn allow_break_inside_compact_while_loop() {
 
 #[test]
 fn allow_break_inside_compact_for_loop() {
-   let program = match Parser::parse("for (let x in 0..10) break;") {
+   let program = match Parser::parse("for (var x in 0..10) break;") {
       Ok(ast) => ast,
       Err(_) => panic!("Parser Had Errors."),
    };
@@ -99,7 +99,7 @@ fn allow_break_inside_nested_while_loop_scope() {
 
 #[test]
 fn allow_break_inside_nested_for_loop_scope() {
-   let src = "for let x in 0..10 {
+   let src = "for var x in 0..10 {
         {
             {{ break; }}
         }
@@ -166,7 +166,7 @@ fn allow_return_inside_loop_inside_func() {
 #[test]
 fn functions_have_access_to_global_vars() {
    let src = "
-        let global = \"some value\";
+        var global = \"some value\";
 
         func my_function() {
             print(global);

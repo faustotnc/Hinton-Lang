@@ -6,7 +6,7 @@ use crate::errors::{CompilerErrorType, ErrorReport};
 use crate::lexer::tokens::Token;
 use crate::objects::{FuncObject, Object};
 use std::convert::TryFrom;
-use std::path::PathBuf;
+use std::path::Path;
 
 // Submodules
 mod expressions;
@@ -45,12 +45,13 @@ enum LoopType {
    While,
 }
 
-/// Represents the type of chunk that the compiler is currently
-/// emitting bytecode into.
+/// Represents the context that the compiler is currently using
+/// to compile the AST.
 #[derive(Clone)]
-enum CompilerType {
-   Function,
+enum CompilerCtx {
    Script,
+   Function,
+   Method,
 }
 
 /// A special type of scope for compiling function declarations.
@@ -98,7 +99,7 @@ pub struct Compiler {
    /// A list of compiler errors generated while compiling the program.
    errors: Vec<ErrorReport>,
    /// The type of chunk currently being compiled.
-   compiler_type: CompilerType,
+   compiler_type: CompilerCtx,
 }
 
 impl Compiler {
@@ -114,7 +115,7 @@ impl Compiler {
    /// the main chunk for this module. Otherwise, returns an
    /// InterpretResult::INTERPRET_COMPILE_ERROR.
    pub fn compile_ast(
-      filepath: &PathBuf,
+      filepath: &Path,
       program: &ASTNode,
       natives: Vec<String>,
    ) -> Result<FuncObject, Vec<ErrorReport>> {
@@ -122,7 +123,7 @@ impl Compiler {
       // the function to which the symbol table belongs.
       let symbols = SymbolTable::new(vec![Symbol {
          name: format!("<File '{}'>", filepath.to_str().unwrap()),
-         s_type: SymbolType::Function,
+         s_type: SymbolType::Func,
          is_initialized: true,
          depth: 0,
          is_used: true,
@@ -147,7 +148,7 @@ impl Compiler {
       };
 
       let mut _self = Compiler {
-         compiler_type: CompilerType::Script,
+         compiler_type: CompilerCtx::Script,
          functions: vec![base_fn],
          errors: vec![],
          globals: SymbolTable::new(vec![]),
@@ -164,16 +165,16 @@ impl Compiler {
       #[cfg(feature = "show_raw_bytecode")]
       _self.print_raw_bytecode();
 
-      if _self.errors.len() == 0 {
+      if _self.errors.is_empty() {
          Ok(std::mem::take(&mut _self.current_func_scope_mut().function))
       } else {
-         return Err(_self.errors);
+         Err(_self.errors)
       }
    }
 
    /// Compiles an AST node.
    fn compile_node(&mut self, node: &ASTNode) {
-      return match node {
+      match node {
          ASTNode::Array(x) => self.compile_array_expr(x),
          ASTNode::ArrayIndexing(x) => self.compile_array_indexing_expr(x),
          ASTNode::Binary(x) => self.compile_binary_expr(x),
@@ -184,7 +185,7 @@ impl Compiler {
          ASTNode::ExpressionStmt(x) => self.compile_expression_stmt(x),
          ASTNode::ForStmt(x) => self.compile_for_stmt(x),
          ASTNode::FunctionCall(x) => self.compile_instance_or_func_call_expr(x, false),
-         ASTNode::FunctionDecl(x) => self.compile_function_decl(x),
+         ASTNode::FunctionDecl(x) => self.compile_function_decl(x, CompilerCtx::Function),
          ASTNode::Identifier(x) => self.compile_identifier_expr(x),
          ASTNode::IfStmt(x) => self.compile_if_stmt(x),
          ASTNode::Instance(x) => self.compile_instance_or_func_call_expr(x, true),
@@ -200,7 +201,7 @@ impl Compiler {
          ASTNode::VarReassignment(x) => self.compile_var_reassignment_expr(x),
          ASTNode::VariableDecl(x) => self.compile_variable_decl(x),
          ASTNode::WhileStmt(x) => self.compile_while_stmt(x),
-      };
+      }
    }
 
    /// Compiles an AST module node.
@@ -212,7 +213,7 @@ impl Compiler {
 
    /// Checks that the compiler is currently in the global scope.
    fn is_global_scope(&self) -> bool {
-      if let CompilerType::Script = self.compiler_type {
+      if let CompilerCtx::Script = self.compiler_type {
          if self.functions.len() == 1 && self.relative_scope_depth() == 0 {
             return true;
          }
@@ -351,13 +352,11 @@ impl Compiler {
             self.current_chunk_mut().modify_byte(offset, jump[0]);
             self.current_chunk_mut().modify_byte(offset + 1, jump[1]);
          }
-         Err(_) => {
-            return self.error_at_token(
-               token,
-               CompilerErrorType::MaxCapacity,
-               "Too much code to jump over.",
-            );
-         }
+         Err(_) => self.error_at_token(
+            token,
+            CompilerErrorType::MaxCapacity,
+            "Too much code to jump over.",
+         ),
       }
    }
 
@@ -383,7 +382,7 @@ impl Compiler {
          let jump = (offset + 3) as u16;
          self.emit_raw_short(jump, line_info);
       } else {
-         return self.error_at_token(token, CompilerErrorType::MaxCapacity, "Loop body too large.");
+         self.error_at_token(token, CompilerErrorType::MaxCapacity, "Loop body too large.")
       }
    }
 

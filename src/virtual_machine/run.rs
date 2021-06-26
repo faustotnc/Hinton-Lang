@@ -2,7 +2,7 @@ use crate::ast::{BinaryExprType, UnaryExprType};
 use crate::bytecode::OpCode;
 use crate::errors::RuntimeErrorType;
 use crate::natives::{get_next_in_iter, make_iter};
-use crate::objects::{ClassObject, ClosureObject, Object, RangeObject, UpValRef};
+use crate::objects::{BoundMethod, ClassObject, ClosureObject, Object, RangeObject, UpValRef};
 use crate::virtual_machine::{RuntimeResult, VirtualMachine};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -34,11 +34,9 @@ impl VirtualMachine {
 
             // Object makers
             OpCode::MakeArray | OpCode::MakeArrayLong => self.op_make_array(),
-            OpCode::MakeClass | OpCode::MakeClassLong => self.op_make_class(),
             OpCode::MakeClosure | OpCode::MakeClosureLong => self.op_make_closure(),
             OpCode::MakeClosureLarge | OpCode::MakeClosureLongLarge => self.op_make_closure_large(),
             OpCode::MakeDict | OpCode::MakeDictLong => self.op_make_dictionary(),
-            OpCode::MakeInstance => self.op_make_instance(),
             OpCode::MakeIter => self.op_make_iter(),
             OpCode::MakeRange => self.op_make_range(),
             OpCode::MakeTuple | OpCode::MakeTupleLong => self.op_make_tuple(),
@@ -93,6 +91,11 @@ impl VirtualMachine {
             OpCode::Return => self.op_function_return(),
             OpCode::SetUpVal | OpCode::SetUpValLong => self.op_set_up_value(),
 
+            // Classes & Instances
+            OpCode::MakeInstance => self.op_make_instance(),
+            OpCode::MakeClass | OpCode::MakeClassLong => self.op_make_class(),
+            OpCode::BindMethod => self.bind_class_method(),
+
             // Property manipulators
             OpCode::GetProp | OpCode::GetPropLong => self.op_get_property(),
             OpCode::SetProp | OpCode::SetPropLong => self.op_set_property(),
@@ -116,7 +119,7 @@ impl VirtualMachine {
       self.pop_stack(); // Remove the main function off the stack
       self.frames.pop();
 
-      return RuntimeResult::EndOK;
+      RuntimeResult::EndOK
    }
 
    /// Executes the instruction to pop the top of the stack, and jump forward by the given
@@ -138,7 +141,7 @@ impl VirtualMachine {
       // The JUMP_IF_FALSE_OR_POP instruction always has a short as its operand.
       let offset = self.get_next_short() as usize;
 
-      if self.peek_stack(self.stack.len() - 1).is_falsey() {
+      if self.peek_stack(0).is_falsey() {
          self.current_frame_mut().ip += offset;
       } else {
          self.pop_stack();
@@ -153,7 +156,7 @@ impl VirtualMachine {
       // The JUMP_IF_TRUE_OR_POP instruction always has a short as its operand.
       let offset = self.get_next_short() as usize;
 
-      if !self.peek_stack(self.stack.len() - 1).is_falsey() {
+      if !self.peek_stack(0).is_falsey() {
          self.current_frame_mut().ip += offset;
       } else {
          self.pop_stack();
@@ -183,7 +186,7 @@ impl VirtualMachine {
 
       match self.natives.get_native_fn_object(native) {
          Ok(f) => self.push_stack(Object::Native(Box::new(f))),
-         Err(e) => return e,
+         Err(e) => e,
       }
    }
 
@@ -192,9 +195,7 @@ impl VirtualMachine {
       // Functions can only have 255-MAX parameters
       let arg_count = self.get_next_byte();
 
-      let maybe_function = self
-         .peek_stack(self.stack.len() - (arg_count as usize) - 1)
-         .clone();
+      let maybe_function = self.peek_stack(arg_count as usize).clone();
 
       self.call_object(maybe_function, arg_count)
    }
@@ -207,7 +208,7 @@ impl VirtualMachine {
    fn op_make_closure(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::MakeClosure);
 
-      let function = match self.read_constant(pos).clone() {
+      let function = match self.read_constant(pos) {
          Object::Function(obj) => obj,
          _ => unreachable!("Expected a function object for closure."),
       };
@@ -239,7 +240,7 @@ impl VirtualMachine {
    fn op_make_closure_large(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::MakeClosureLarge);
 
-      let function = match self.read_constant(pos).clone() {
+      let function = match self.read_constant(pos) {
          Object::Function(obj) => obj,
          _ => unreachable!("Expected a function object for closure."),
       };
@@ -268,7 +269,7 @@ impl VirtualMachine {
       let pos = self.get_std_or_long_operand(OpCode::GetUpVal);
 
       let val = match &*self.get_up_val(pos).borrow() {
-         UpValRef::Open(l) => self.peek_stack(*l).clone(),
+         UpValRef::Open(l) => self.peek_stack_abs(*l).clone(),
          UpValRef::Closed(o) => o.clone(),
       };
 
@@ -295,7 +296,7 @@ impl VirtualMachine {
 
       for u in self.up_values.iter() {
          if u.borrow().is_open_at(self.current_frame().return_index + pos) {
-            let new_val = self.peek_stack(self.current_frame().return_index + pos);
+            let new_val = self.peek_stack_abs(self.current_frame().return_index + pos);
             u.replace(UpValRef::Closed(new_val.clone()));
             break;
          }
@@ -331,7 +332,7 @@ impl VirtualMachine {
       }
       defaults.reverse();
 
-      match self.peek_stack_mut(self.stack.len() - 1) {
+      match self.peek_stack_mut(0) {
          Object::Function(m) => {
             m.borrow_mut().defaults = defaults;
          }
@@ -363,12 +364,15 @@ impl VirtualMachine {
    fn op_make_class(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::MakeClass);
 
-      let name = match self.read_constant(pos).clone() {
+      let name = match self.read_constant(pos) {
          Object::String(s) => s,
          _ => unreachable!("Expected string for class name."),
       };
 
-      let new_class = Object::Class(ClassObject { name });
+      let new_class = Object::Class(ClassObject {
+         name,
+         members: Rc::new(RefCell::new(HashMap::new())),
+      });
       self.push_stack(new_class)
    }
 
@@ -376,11 +380,7 @@ impl VirtualMachine {
    fn op_make_instance(&mut self) -> RuntimeResult {
       // Instances can only have 255-MAX arguments
       let arg_count = self.get_next_byte();
-
-      let maybe_instance = self
-         .peek_stack(self.stack.len() - (arg_count as usize) - 1)
-         .clone();
-
+      let maybe_instance = self.peek_stack(arg_count as usize).clone();
       self.create_instance(maybe_instance, arg_count)
    }
 
@@ -388,16 +388,23 @@ impl VirtualMachine {
    fn op_get_property(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::GetProp);
 
-      let prop_name = match self.read_constant(pos).clone() {
+      let prop_name = match self.read_constant(pos) {
          Object::String(name) => name,
          _ => unreachable!("Expected string for 'GetProp' name."),
       };
 
       match self.pop_stack() {
          Object::Instance(x) => {
-            if x.borrow().fields.contains_key(&prop_name) {
-               let val = x.borrow().fields.get(&prop_name).unwrap().clone();
-               self.push_stack(val)
+            if x.borrow().members.contains_key(&prop_name) {
+               let val = x.borrow().members.get(&prop_name).unwrap().clone();
+
+               match val {
+                  Object::Closure(c) => self.push_stack(Object::BoundMethod(BoundMethod {
+                     receiver: x,
+                     method: c,
+                  })),
+                  _ => self.push_stack(val),
+               }
             } else {
                return RuntimeResult::Error {
                   error: RuntimeErrorType::ReferenceError,
@@ -428,7 +435,7 @@ impl VirtualMachine {
    fn op_set_property(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::SetProp);
 
-      let prop_name = match self.read_constant(pos).clone() {
+      let prop_name = match self.read_constant(pos) {
          Object::String(name) => name,
          _ => unreachable!("Expected string for 'SetProp' name."),
       };
@@ -437,8 +444,19 @@ impl VirtualMachine {
 
       match self.pop_stack() {
          Object::Instance(x) => {
-            x.borrow_mut().fields.insert(prop_name, value.clone());
-            self.push_stack(value)
+            if x.borrow().members.contains_key(&prop_name) {
+               x.borrow_mut().members.insert(prop_name, value.clone());
+               self.push_stack(value)
+            } else {
+               return RuntimeResult::Error {
+                  error: RuntimeErrorType::ReferenceError,
+                  message: format!(
+                     "Property '{}' not defined for objects of type '{}'.",
+                     prop_name,
+                     x.borrow().class.name
+                  ),
+               };
+            }
          }
          _ => todo!("Other objects also have properties."),
       }
@@ -477,7 +495,7 @@ impl VirtualMachine {
 
       match result {
          Ok(r) => self.push_stack(r),
-         Err(e) => return e.to_runtime_error(),
+         Err(e) => e.to_runtime_error(),
       }
    }
 
@@ -516,7 +534,7 @@ impl VirtualMachine {
 
       match result {
          Ok(r) => self.push_stack(r),
-         Err(e) => return e.to_runtime_error(),
+         Err(e) => e.to_runtime_error(),
       }
    }
 
@@ -526,7 +544,7 @@ impl VirtualMachine {
    fn op_get_iter_next_or_jump(&mut self) -> RuntimeResult {
       let jump = self.get_next_short() as usize;
 
-      match self.peek_stack(self.stack.len() - 1) {
+      match self.peek_stack(0) {
          Object::Iter(i) => match get_next_in_iter(i) {
             Ok(o) => self.push_stack(o),
             Err(_) => {
@@ -563,8 +581,7 @@ impl VirtualMachine {
          tuple_values.push(self.pop_stack());
       }
 
-      let tup = Box::new(tuple_values);
-      self.push_stack(Object::Tuple(tup))
+      self.push_stack(Object::Tuple(tuple_values))
    }
 
    /// Executes the instruction to create a dictionary object with the top `N` key-value
@@ -595,7 +612,7 @@ impl VirtualMachine {
 
       match target.subscript(&index) {
          Ok(r) => self.push_stack(r),
-         Err(e) => return e.to_runtime_error(),
+         Err(e) => e.to_runtime_error(),
       }
    }
 
@@ -605,7 +622,7 @@ impl VirtualMachine {
       let pos = self.get_std_or_long_operand(OpCode::GetLocal);
 
       let idx = self.current_frame().return_index + pos;
-      let value = self.peek_stack(idx).clone();
+      let value = self.peek_stack_abs(idx).clone();
       self.push_stack(value)
    }
 
@@ -626,7 +643,7 @@ impl VirtualMachine {
       let pos = self.get_std_or_long_operand(OpCode::DefineGlobal);
 
       // Gets the name from the pool assigns the value to the global
-      if let Object::String(name) = self.read_constant(pos).clone() {
+      if let Object::String(name) = self.read_constant(pos) {
          let val = self.pop_stack();
          self.globals.insert(name, val);
          RuntimeResult::Continue
@@ -640,7 +657,7 @@ impl VirtualMachine {
       let pos = self.get_std_or_long_operand(OpCode::GetGlobal);
 
       // Gets the name from the pool
-      if let Object::String(name) = self.read_constant(pos).clone() {
+      if let Object::String(name) = self.read_constant(pos) {
          let val = self.globals.get(&name).unwrap().clone();
          self.push_stack(val)
       } else {
@@ -653,7 +670,7 @@ impl VirtualMachine {
       let pos = self.get_std_or_long_operand(OpCode::SetGlobal);
 
       // Gets the name from the pool
-      if let Object::String(name) = self.read_constant(pos).clone() {
+      if let Object::String(name) = self.read_constant(pos) {
          let val = self.stack.last().unwrap().clone();
          self.globals.insert(name, val);
          RuntimeResult::Continue
@@ -668,7 +685,7 @@ impl VirtualMachine {
 
       match make_iter(tos) {
          Ok(iter) => self.push_stack(iter),
-         Err(e) => return e,
+         Err(e) => e,
       }
    }
 
@@ -682,7 +699,32 @@ impl VirtualMachine {
    /// function's constant pool onto the stack.
    fn op_load_constant(&mut self) -> RuntimeResult {
       let pos = self.get_std_or_long_operand(OpCode::LoadConstant);
-      let val = self.read_constant(pos).clone();
+      let val = self.read_constant(pos);
       self.push_stack(val)
+   }
+
+   fn bind_class_method(&mut self) -> RuntimeResult {
+      let method = match self.pop_stack() {
+         Object::Function(f) => ClosureObject {
+            function: f,
+            up_values: vec![],
+         },
+         Object::Closure(c) => c,
+         _ => unreachable!("Expected function or closure on TOS for method binding."),
+      };
+
+      let method_name = method.function.borrow().name.clone();
+      let maybe_class = self.peek_stack(0).clone();
+
+      match maybe_class {
+         Object::Class(c) => {
+            c.members
+               .borrow_mut()
+               .insert(method_name, Object::Closure(method));
+         }
+         _ => unreachable!("Expected class object on TOS for method binding."),
+      }
+
+      RuntimeResult::Continue
    }
 }

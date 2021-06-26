@@ -73,7 +73,7 @@ impl ObjectOprErrType {
 /// - `errors`: An `ErrorList` containing the errors.
 /// - `source`: A reference to the source contents.
 pub fn report_errors_list(filepath: &PathBuf, errors: Vec<ErrorReport>, source: &str) {
-   let source_lines: Vec<&str> = source.split("\n").collect();
+   let source_lines: Vec<&str> = source.split('\n').collect();
 
    for error in errors.iter() {
       eprintln!("{}", error.message);
@@ -97,7 +97,7 @@ pub fn report_errors_list(filepath: &PathBuf, errors: Vec<ErrorReport>, source: 
 /// - `col`: The source column number of the error.
 /// - `len`: The length of the token that produced the error.
 /// - `lines`: A reference to a vector with the source lines.
-fn print_error_source(filepath: &PathBuf, line_num: usize, col: usize, len: usize, lines: &Vec<&str>) {
+fn print_error_source(filepath: &PathBuf, line_num: usize, col: usize, len: usize, lines: &[&str]) {
    let front_pad = (f64::log10(line_num as f64).floor() + 1f64) as usize;
    let line = lines.get(line_num - 1).unwrap();
 
@@ -130,13 +130,19 @@ pub fn print_error_snippet(line_num: usize, col: usize, len: usize, src: &str) {
          break;
       }
    }
-   let col = col - removed_whitespace;
 
-   eprintln!("{}|", whitespace_pad_size);
-   eprint!(" {} | ", line_num);
-   eprintln!("{}", src.trim());
-   eprint!("{}|", whitespace_pad_size);
-   eprintln!(" {}\x1b[31;1m{}\x1b[0m\n", " ".repeat(col), "^".repeat(len));
+   let col = col - removed_whitespace;
+   let trimmed_source = src.trim();
+
+   if !trimmed_source.is_empty() {
+      eprintln!("{}|", whitespace_pad_size);
+      eprint!(" {} | ", line_num);
+      eprintln!("{}", trimmed_source);
+      eprint!("{}|", whitespace_pad_size);
+      eprintln!(" {}\x1b[31;1m{}\x1b[0m", " ".repeat(col), "^".repeat(len));
+   }
+
+   eprintln!()
 }
 
 /// Throws a runtime error to the console.
@@ -147,7 +153,7 @@ pub fn print_error_snippet(line_num: usize, col: usize, len: usize, src: &str) {
 /// - `message`: The error message to be displayed.
 /// - `source`: The program's source text.
 pub fn report_runtime_error(vm: &VirtualMachine, error: RuntimeErrorType, message: String, source: &str) {
-   let source_lines: Vec<&str> = source.split("\n").collect();
+   let source_lines: Vec<&str> = source.split('\n').collect();
 
    let frame = vm.current_frame();
    let f = frame.closure.function.borrow();
