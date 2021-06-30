@@ -100,27 +100,54 @@ pub struct BoundMethod {
    pub method: ClosureObject,
 }
 
+/// Represents a Hinton class field.
+#[derive(Clone)]
+pub struct ClassFieldObject {
+   pub value: Box<Object>,
+   pub is_constant: bool,
+}
+
 /// All types of objects in Hinton
 #[derive(Clone)]
 pub enum Object {
-   Bool(bool),
-   Float(f64),
-   Int(i64),
-   Null,
-   Range(RangeObject),
-   Class(ClassObject),
-
-   // Heap-allocated
    Array(Rc<RefCell<Vec<Object>>>),
+   Bool(bool),
    BoundMethod(BoundMethod),
+   Class(ClassObject),
+   ClassField(ClassFieldObject),
    Closure(ClosureObject),
    Dict(Rc<RefCell<HashMap<String, Object>>>),
+   Float(f64),
    Function(Rc<RefCell<FuncObject>>),
    Instance(Rc<RefCell<InstanceObject>>),
+   Int(i64),
    Iter(Rc<RefCell<IterObject>>),
    Native(Box<NativeFuncObj>),
+   Null,
+   Range(RangeObject),
    String(String),
    Tuple(Vec<Object>),
+}
+
+/// Checks that two vectors of objects are equal in value.
+///
+/// # Parameters
+/// - `v1`: The first vector of objects.
+/// - `v2`: The second vector of objects.
+///
+/// # Returns
+/// `bool`: True if the vectors are equal, false otherwise.
+pub fn obj_vectors_equal(v1: &[Object], v2: &[Object]) -> bool {
+   if v1.len() != v2.len() {
+      false
+   } else {
+      for (i, o) in v1.iter().enumerate() {
+         if !o.equals(&v2[i]) {
+            return false;
+         }
+      }
+      true
+   }
 }
 
 impl Object {
@@ -134,6 +161,7 @@ impl Object {
          Self::Function(_) | Self::Native(_) | Self::Closure(_) | Self::BoundMethod(_) => {
             String::from("Function")
          }
+         Self::ClassField(c) => c.value.type_name(),
          Self::Int(_) => String::from("Int"),
          Self::Iter(_) => String::from("Iter"),
          Self::Null => String::from("Null"),
@@ -168,10 +196,11 @@ impl Object {
    /// Checks that this object is falsey.
    pub fn is_falsey(&self) -> bool {
       match self {
-         Object::Null => true,
-         Object::Bool(val) => !val,
-         Object::Int(x) if *x == 0i64 => true,
-         Object::Float(x) if *x == 0f64 => true,
+         Self::Null => true,
+         Self::Bool(val) => !val,
+         Self::Int(x) if *x == 0i64 => true,
+         Self::Float(x) if *x == 0f64 => true,
+         Self::ClassField(c) => c.value.is_falsey(),
          _ => false,
       }
    }
@@ -199,42 +228,10 @@ impl Object {
       }
    }
 
-   /// Tries to convert this object to a Rust string.
-   pub fn as_string(&self) -> Option<&String> {
-      match self {
-         Object::String(s) => Some(s),
-         _ => None,
-      }
-   }
-
    /// Tries to convert this object to a Rust boolean.
    pub fn as_bool(&self) -> Option<bool> {
       match self {
          Object::Bool(v) => Some(*v),
-         _ => None,
-      }
-   }
-
-   /// Tries to convert this object to a Hinton range object.
-   pub fn as_range(&self) -> Option<&RangeObject> {
-      match self {
-         Object::Range(v) => Some(v),
-         _ => None,
-      }
-   }
-
-   /// Tries to convert this object to a Rust vector of Hinton objects (array).
-   pub fn as_array(&self) -> Option<&Rc<RefCell<Vec<Object>>>> {
-      match self {
-         Object::Array(v) => Some(v),
-         _ => None,
-      }
-   }
-
-   /// Tries to convert this object to a Rust vector of Hinton objects (tuple).
-   pub fn as_tuple(&self) -> Option<&Vec<Object>> {
-      match self {
-         Object::Tuple(v) => Some(v),
          _ => None,
       }
    }
@@ -252,94 +249,72 @@ impl Object {
    /// Checks that this object is equal to the provided object according to Hinton's rules for
    /// object equality.
    pub fn equals(&self, right: &Object) -> bool {
-      // Equality check for number-like types
+      // If the rhs is a class field, we match `self` against the wrapped
+      // value of the field, making recursive calls to `Object.equals(...)`
+      // in case the value is itself also a class field.
+      if let Object::ClassField(r) = right {
+         return self.equals(&r.value);
+      }
+
       match self {
-         Object::Int(i) => {
-            return match right {
-               Object::Int(x) if i == x => true,
-               Object::Float(x) if (x - *i as f64) == 0f64 => true,
-               Object::Bool(x) if (i == &0i64 && !*x) || (i == &1i64 && *x) => true,
-               _ => false,
-            }
-         }
-         Object::Float(f) => {
-            return match right {
-               Object::Int(x) if (f - *x as f64) == 0f64 => true,
-               Object::Float(x) if f == x => true,
-               Object::Bool(x) if (f == &0f64 && !*x) || (f == &1f64 && *x) => true,
-               _ => false,
-            }
-         }
-         Object::Bool(b) => {
-            return match right {
-               Object::Int(x) if (x == &0i64 && !*b) || (x == &1i64 && *b) => true,
-               Object::Float(x) if (x == &0f64 && !*b) || (x == &1f64 && *b) => true,
-               Object::Bool(x) => !(b ^ x),
-               _ => false,
-            }
-         }
-         _ => {}
-      }
-
-      // If the operands differ in type, we can safely assume
-      // they are not equal in value.
-      if std::mem::discriminant(self) != std::mem::discriminant(&right) {
-         return false;
-      }
-
-      // At this point, the operands have the same type, so we
-      // proceed to check if they match in value.
-      return match self {
-         Object::String(a) => (a == right.as_string().unwrap()),
-         Object::Array(a) => {
-            let a = &a.borrow();
-            let b = &right.as_array().unwrap().borrow();
-
-            // If the arrays differ in size, they must differ in value. However, if they
-            // are equal in size, then we must check that each item match.
-            if a.len() != b.len() {
-               false
+         Object::Int(i) => match right {
+            Object::Int(x) if i == x => true,
+            Object::Float(x) if (x - *i as f64) == 0f64 => true,
+            Object::Bool(x) if (i == &0i64 && !*x) || (i == &1i64 && *x) => true,
+            _ => false,
+         },
+         Object::Float(f) => match right {
+            Object::Int(x) if (f - *x as f64) == 0f64 => true,
+            Object::Float(x) if f == x => true,
+            Object::Bool(x) if (f == &0f64 && !*x) || (f == &1f64 && *x) => true,
+            _ => false,
+         },
+         Object::Bool(b) => match right {
+            Object::Int(x) if (x == &0i64 && !*b) || (x == &1i64 && *b) => true,
+            Object::Float(x) if (x == &0f64 && !*b) || (x == &1f64 && *b) => true,
+            Object::Bool(x) => !(b ^ x),
+            _ => false,
+         },
+         Object::String(a) => {
+            if let Object::String(s) = right {
+               a == s
             } else {
-               for i in 0..a.len() {
-                  // If at least one of the items differ in value,
-                  // then the arrays are not equals.
-                  if !&a[i].equals(&b[i]) {
-                     return false;
-                  }
-               }
-
-               true
+               false
+            }
+         }
+         Object::Array(a) => {
+            if let Object::Array(t) = right {
+               obj_vectors_equal(&a.borrow(), &t.borrow())
+            } else {
+               false
             }
          }
          Object::Tuple(a) => {
-            let b = &right.as_tuple().unwrap();
-
-            // If the tuples differ in size, they must differ in value. However, if they
-            // are equal in size, then we must check that each item match.
-            if a.len() != b.len() {
-               false
+            if let Object::Tuple(t) = right {
+               obj_vectors_equal(a, t)
             } else {
-               for i in 0..a.len() {
-                  // If at least one of the items differ in value,
-                  // then the arrays are not equals.
-                  if !&a[i].equals(&b[i]) {
-                     return false;
-                  }
-               }
-
-               true
+               false
             }
          }
          Object::Range(a) => {
-            let b = right.as_range().unwrap();
-
-            // If the ranges match in boundaries,
-            // then they are equal in value.
-            a.min == b.min && a.max == b.max
+            if let Object::Range(r) = right {
+               // If the ranges match in boundaries,
+               // then they are equal in value.
+               a.min == r.min && a.max == r.max
+            } else {
+               false
+            }
          }
-         Object::Null => return matches!(right, Object::Null),
+         Object::ClassField(c1) => {
+            if let Object::ClassField(c2) = right {
+               c1.value.equals(&c2.value)
+            } else {
+               c1.value.equals(right)
+            }
+         }
+         Object::Null => matches!(right, Object::Null),
          _ => false,
-      };
+      }
    }
 }
 
@@ -436,7 +411,7 @@ impl<'a> fmt::Display for Object {
             let str = if name.is_empty() {
                String::from("<Func script>")
             } else {
-               format!("<Func '{}'>", name)
+               format!("<Method '{}' in '{}'>", name, inner.receiver.borrow().class.name)
             };
 
             fmt::Display::fmt(&str, f)
@@ -445,6 +420,7 @@ impl<'a> fmt::Display for Object {
          Object::Instance(ref inner) => {
             fmt::Display::fmt(&format!("<Instance of '{}'>", inner.borrow().class.name), f)
          }
+         Object::ClassField(ref c) => fmt::Display::fmt(c.value.as_ref(), f),
          Object::Native(ref inner) => {
             let str = format!("<NativeFn '{}'>", inner.name);
             fmt::Display::fmt(&str, f)

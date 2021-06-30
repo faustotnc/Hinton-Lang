@@ -3,11 +3,14 @@ use super::UpValue;
 /// Types of symbols available in Hinton.
 #[derive(Clone)]
 pub enum SymbolType {
-   Var,
-   Const,
-   Func,
    Class,
+   Const,
+   ConstField,
+   Func,
+   Method,
    Param,
+   Var,
+   VarField,
 }
 
 /// Represents a symbol found in a particular scope.

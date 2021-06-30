@@ -605,8 +605,13 @@ impl<'a> Parser {
          L_CURLY => {
             return self.parse_dictionary();
          }
-         IDENTIFIER | SELF_KW => {
+         IDENTIFIER => {
             return Some(Identifier(IdentifierExprNode {
+               token: self.previous.clone(),
+            }))
+         }
+         SELF_KW => {
+            return Some(SelfExpr(SelfExprNode {
                token: self.previous.clone(),
             }))
          }

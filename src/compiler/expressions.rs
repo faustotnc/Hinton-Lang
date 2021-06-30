@@ -141,6 +141,23 @@ impl Compiler {
       }
    }
 
+   /// Compiles a `self` expression.
+   pub(super) fn compile_self_expr(&mut self, expr: &SelfExprNode) {
+      if self.classes.is_empty() {
+         self.error_at_token(
+            &expr.token,
+            CompilerErrorType::Reference,
+            "Cannot use 'self' outside of class.",
+         );
+
+         return;
+      }
+
+      if let Ok(res) = self.resolve_symbol(&expr.token, false) {
+         self.named_variable(&res, &expr.token, false);
+      }
+   }
+
    /// Emits the appropriate opcode to either get or set a local or global variable.
    ///
    /// # Parameters
@@ -262,9 +279,6 @@ impl Compiler {
       let prop_name = Object::String(expr.setter.lexeme.clone());
       let prop_line_info = (expr.setter.line_num, expr.setter.column_start);
 
-      // TODO: Should objects be frozen by default?
-      // That is, Should we statically check that a property exists inside an object and prevent
-      // adding/removing  properties at runtime?
       if let Some(pos) = self.add_literal_to_pool(prop_name, &expr.setter, false) {
          if let ReassignmentType::None = expr.opr_type {
             // Proceed to directly reassign the variable.
@@ -299,9 +313,6 @@ impl Compiler {
       let prop_name = Object::String(expr.getter.lexeme.clone());
       let prop_line_info = (expr.getter.line_num, expr.getter.column_start);
 
-      // TODO: Should objects be frozen by default?
-      // That is, Should we statically check that a property exists inside an object and prevent
-      // adding/removing  properties at runtime?
       if let Some(pos) = self.add_literal_to_pool(prop_name, &expr.getter, false) {
          if pos < 256 {
             self.emit_op_code_with_byte(OpCode::GetProp, pos as u8, prop_line_info);

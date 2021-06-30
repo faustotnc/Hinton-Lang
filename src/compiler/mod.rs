@@ -52,6 +52,7 @@ enum CompilerCtx {
    Script,
    Function,
    Method,
+   Class,
 }
 
 /// A special type of scope for compiling function declarations.
@@ -86,6 +87,10 @@ pub struct UpValue {
    pub is_local: bool,
 }
 
+pub struct ClassScope {
+   members: SymbolTable,
+}
+
 /// Represents the compiler and its internal state.
 pub struct Compiler {
    /// A list of function declarations made inside the program,
@@ -100,6 +105,10 @@ pub struct Compiler {
    errors: Vec<ErrorReport>,
    /// The type of chunk currently being compiled.
    compiler_type: CompilerCtx,
+   /// A list of class declarations made inside the program, where
+   /// the last element of this vector represents the inner-most
+   /// class declaration currently being compiled.
+   classes: Vec<ClassScope>,
 }
 
 impl Compiler {
@@ -153,6 +162,7 @@ impl Compiler {
          errors: vec![],
          globals: SymbolTable::new(vec![]),
          natives,
+         classes: vec![],
       };
 
       // Compile the function body
@@ -201,6 +211,7 @@ impl Compiler {
          ASTNode::VarReassignment(x) => self.compile_var_reassignment_expr(x),
          ASTNode::VariableDecl(x) => self.compile_variable_decl(x),
          ASTNode::WhileStmt(x) => self.compile_while_stmt(x),
+         ASTNode::SelfExpr(x) => self.compile_self_expr(x),
       }
    }
 
@@ -223,7 +234,7 @@ impl Compiler {
    }
 
    /// Gets an immutable reference to the current function scope.
-   fn current_function_scope(&self) -> &FunctionScope {
+   fn current_func_scope(&self) -> &FunctionScope {
       self.functions.last().unwrap()
    }
 
@@ -232,10 +243,44 @@ impl Compiler {
       self.functions.last_mut().unwrap()
    }
 
+   /// Gets an immutable reference to the current class scope.
+   fn current_class_scope(&self) -> Option<&ClassScope> {
+      self.classes.last()
+   }
+
+   /// Gets a mutable reference to the current class scope.
+   fn current_class_scope_mut(&mut self) -> Option<&mut ClassScope> {
+      self.classes.last_mut()
+   }
+
+   fn current_s_table(&self) -> &SymbolTable {
+      if self.is_global_scope() {
+         return &self.globals;
+      }
+
+      if let CompilerCtx::Class = self.compiler_type {
+         &self.current_class_scope().unwrap().members
+      } else {
+         &self.current_func_scope().s_table
+      }
+   }
+
+   fn current_s_table_mut(&mut self) -> &mut SymbolTable {
+      if self.is_global_scope() {
+         return &mut self.globals;
+      }
+
+      if let CompilerCtx::Class = self.compiler_type {
+         &mut self.current_class_scope_mut().unwrap().members
+      } else {
+         &mut self.current_func_scope_mut().s_table
+      }
+   }
+
    /// Gets an immutable reference to the chunk where the compiler
    /// is currently emitting bytecode into.
    fn current_chunk(&self) -> &Chunk {
-      &self.current_function_scope().function.chunk
+      &self.current_func_scope().function.chunk
    }
 
    /// Gets a mutable reference to the chunk where the compiler
@@ -246,16 +291,16 @@ impl Compiler {
 
    /// Gets the current scope depth relative to the current function scope.
    fn relative_scope_depth(&self) -> usize {
-      self.current_function_scope().scope_depth
+      self.current_func_scope().scope_depth
    }
 
    /// Pretty-prints the compiled chunk of bytecode fot the current function.
    #[cfg(feature = "show_bytecode")]
    fn print_pretty_bytecode(&self) {
       bytecode::disassemble_function_scope(
-         &self.current_function_scope().function.chunk,
+         &self.current_func_scope().function.chunk,
          &self.natives,
-         &self.current_function_scope().function.name,
+         &self.current_func_scope().function.name,
       );
    }
 
@@ -264,7 +309,7 @@ impl Compiler {
    fn print_raw_bytecode(&self) {
       bytecode::print_raw(
          self.current_chunk(),
-         self.current_function_scope().function.name.clone().as_str(),
+         self.current_func_scope().function.name.clone().as_str(),
       );
    }
 

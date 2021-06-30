@@ -2,7 +2,9 @@ use crate::ast::{BinaryExprType, UnaryExprType};
 use crate::bytecode::OpCode;
 use crate::errors::RuntimeErrorType;
 use crate::natives::{get_next_in_iter, make_iter};
-use crate::objects::{BoundMethod, ClassObject, ClosureObject, Object, RangeObject, UpValRef};
+use crate::objects::{
+   BoundMethod, ClassFieldObject, ClassObject, ClosureObject, Object, RangeObject, UpValRef,
+};
 use crate::virtual_machine::{RuntimeResult, VirtualMachine};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -92,9 +94,11 @@ impl VirtualMachine {
             OpCode::SetUpVal | OpCode::SetUpValLong => self.op_set_up_value(),
 
             // Classes & Instances
-            OpCode::MakeInstance => self.op_make_instance(),
+            OpCode::AppendConstField => self.append_const_class_field(),
+            OpCode::AppendMethod => self.append_class_method(),
+            OpCode::AppendVarField => self.append_var_class_field(),
             OpCode::MakeClass | OpCode::MakeClassLong => self.op_make_class(),
-            OpCode::BindMethod => self.bind_class_method(),
+            OpCode::MakeInstance => self.op_make_instance(),
 
             // Property manipulators
             OpCode::GetProp | OpCode::GetPropLong => self.op_get_property(),
@@ -409,7 +413,7 @@ impl VirtualMachine {
                return RuntimeResult::Error {
                   error: RuntimeErrorType::ReferenceError,
                   message: format!(
-                     "Property '{}' not defined for objects of type '{}'.",
+                     "Property '{}' not defined in object of type '{}'.",
                      prop_name,
                      x.borrow().class.name
                   ),
@@ -442,24 +446,35 @@ impl VirtualMachine {
 
       let value = self.pop_stack();
 
-      match self.pop_stack() {
-         Object::Instance(x) => {
-            if x.borrow().members.contains_key(&prop_name) {
-               x.borrow_mut().members.insert(prop_name, value.clone());
-               self.push_stack(value)
-            } else {
-               return RuntimeResult::Error {
+      return match self.pop_stack() {
+         Object::Instance(inst) => {
+            let class_name = inst.borrow().class.name.clone();
+
+            match inst.borrow_mut().members.get_mut(&prop_name) {
+               Some(member) => match member {
+                  Object::ClassField(field) if !field.is_constant => {
+                     field.value = Box::new(value.clone());
+                     self.push_stack(value)
+                  }
+                  _ => RuntimeResult::Error {
+                     error: RuntimeErrorType::ReferenceError,
+                     message: format!(
+                        "Cannot reassign to immutable property '{}' in object of type '{}'.",
+                        prop_name, class_name
+                     ),
+                  },
+               },
+               None => RuntimeResult::Error {
                   error: RuntimeErrorType::ReferenceError,
                   message: format!(
-                     "Property '{}' not defined for objects of type '{}'.",
-                     prop_name,
-                     x.borrow().class.name
+                     "Property '{}' not defined in object of type '{}'.",
+                     prop_name, class_name
                   ),
-               };
+               },
             }
          }
          _ => todo!("Other objects also have properties."),
-      }
+      };
    }
 
    /// Executes the instruction to create a range object with the two objects on the TOS.
@@ -475,7 +490,7 @@ impl VirtualMachine {
          return RuntimeResult::Error {
             error: RuntimeErrorType::TypeError,
             message: format!(
-               "Operation '..' not defined for operands of type '{}' and '{}'.",
+               "Range operation not defined for operands of type '{}' and '{}'.",
                left.type_name(),
                right.type_name()
             ),
@@ -703,7 +718,8 @@ impl VirtualMachine {
       self.push_stack(val)
    }
 
-   fn bind_class_method(&mut self) -> RuntimeResult {
+   /// Appends (or binds) a function object to a class by converting it to a BoundMethod object.
+   fn append_class_method(&mut self) -> RuntimeResult {
       let method = match self.pop_stack() {
          Object::Function(f) => ClosureObject {
             function: f,
@@ -723,6 +739,58 @@ impl VirtualMachine {
                .insert(method_name, Object::Closure(method));
          }
          _ => unreachable!("Expected class object on TOS for method binding."),
+      }
+
+      RuntimeResult::Continue
+   }
+
+   /// Appends a variable field to a class object.
+   fn append_var_class_field(&mut self) -> RuntimeResult {
+      let field_name = match self.pop_stack() {
+         Object::String(s) => s,
+         _ => unreachable!("Expected string on TOS for class field."),
+      };
+
+      let field_value = self.pop_stack();
+      let maybe_class = self.peek_stack(0).clone();
+
+      match maybe_class {
+         Object::Class(c) => {
+            c.members.borrow_mut().insert(
+               field_name,
+               Object::ClassField(ClassFieldObject {
+                  value: Box::new(field_value),
+                  is_constant: false,
+               }),
+            );
+         }
+         _ => unreachable!("Expected class object on TOS for variable field binding."),
+      }
+
+      RuntimeResult::Continue
+   }
+
+   /// Appends a constant field to a class object.
+   fn append_const_class_field(&mut self) -> RuntimeResult {
+      let field_name = match self.pop_stack() {
+         Object::String(s) => s,
+         _ => unreachable!("Expected string on TOS for constant class field."),
+      };
+
+      let field_value = self.pop_stack();
+      let maybe_class = self.peek_stack(0).clone();
+
+      match maybe_class {
+         Object::Class(c) => {
+            c.members.borrow_mut().insert(
+               field_name,
+               Object::ClassField(ClassFieldObject {
+                  value: Box::new(field_value),
+                  is_constant: true,
+               }),
+            );
+         }
+         _ => unreachable!("Expected class object on TOS for constant field binding."),
       }
 
       RuntimeResult::Continue

@@ -442,24 +442,22 @@ impl Parser {
       let name = self.previous.clone();
 
       self.consume(&L_CURLY, "Expected '{' for the class body.");
-      let mut methods: Vec<FunctionDeclNode> = vec![];
-      let mut var_fields: Vec<VariableDeclNode> = vec![];
-      let mut const_fields: Vec<ConstantDeclNode> = vec![];
+      let mut members: Vec<ClassMemberDeclNode> = vec![];
 
       while !self.matches(&TokenType::R_CURLY) {
-         if self.matches(&FUNC_KW) {
+         let member_type = if self.matches(&FUNC_KW) {
             match self.parse_func_declaration() {
-               Some(decl) => methods.push(decl),
+               Some(decl) => ClassMemberDecl::Method(decl),
                None => return None, // Could not parse method
             }
          } else if self.matches(&VAR_KW) {
             match self.parse_var_declaration() {
-               Some(decl) => var_fields.push(decl),
+               Some(decl) => ClassMemberDecl::Var(decl),
                None => return None, // Could not parse variable field
             }
          } else if self.matches(&CONST_KW) {
             match self.parse_const_declaration() {
-               Some(decl) => const_fields.push(decl),
+               Some(decl) => ClassMemberDecl::Const(decl),
                None => return None, // Could not parse constant field
             }
          } else {
@@ -470,13 +468,10 @@ impl Parser {
             }
             return None;
          };
+
+         members.push(ClassMemberDeclNode { member_type });
       }
 
-      Some(ClassDecl(ClassDeclNode {
-         name,
-         methods,
-         var_fields,
-         const_fields,
-      }))
+      Some(ClassDecl(ClassDeclNode { name, members }))
    }
 }

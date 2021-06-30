@@ -12,117 +12,117 @@ use std::rc::Rc;
 impl Compiler {
    /// Compiles a function declaration statement.
    pub(super) fn compile_function_decl(&mut self, decl: &FunctionDeclNode, t: CompilerCtx) {
-      if let Ok(parent_symbol_pos) = self.declare_symbol(&decl.name, SymbolType::Func) {
-         let func_pos = (decl.name.line_num, decl.name.column_start);
-         let prev_compiler_type = std::mem::replace(&mut self.compiler_type, t.clone());
+      let func_pos = (decl.name.line_num, decl.name.column_start);
 
-         // The first element in a symbol table is always the symbol representing
-         // the function to which the symbol table belongs, or the `self` variable.
-         let symbols = SymbolTable::new(vec![match t {
-            CompilerCtx::Method => Symbol {
-               name: String::from("self"),
-               s_type: SymbolType::Class,
-               is_initialized: true,
-               depth: 0,
-               is_used: true,
-               line_info: func_pos,
-               is_captured: false,
-            },
-            _ => Symbol {
-               name: decl.name.lexeme.clone(),
-               s_type: SymbolType::Func,
-               is_initialized: true,
-               depth: 0,
-               is_used: true,
-               line_info: func_pos,
-               is_captured: false,
-            },
-         }]);
+      // Get the symbol type for the function declaration.
+      let s_type = if let CompilerCtx::Method = t {
+         SymbolType::Method
+      } else {
+         SymbolType::Func
+      };
 
-         // Make this function declaration the current function scope.
-         self.functions.push(FunctionScope {
-            function: FuncObject {
-               defaults: vec![],
-               min_arity: decl.arity.0,
-               max_arity: decl.arity.1,
-               chunk: bytecode::Chunk::new(),
-               name: decl.name.lexeme.clone(),
-               up_val_count: 0,
-            },
-            s_table: symbols,
-            scope_depth: 0,
-            loops: vec![],
-            breaks: vec![],
-            up_values: vec![],
-         });
+      // Declare the function in the function's parent's scope.
+      let parent_symbol_pos = match self.declare_symbol(&decl.name, s_type) {
+         Ok(p) => p,
+         Err(_) => return,
+      };
 
-         // Add the function's name to the pool of the function
-         self.add_literal_to_pool(Object::String(decl.name.lexeme.clone()), &decl.name, false);
-         // compiles the parameter declarations so that the compiler knows about their lexical
-         // scoping (their stack position).
-         self.compile_parameters(&decl.params);
+      // Change the compiler's context to a function or a method
+      let prev_compiler_type = std::mem::replace(&mut self.compiler_type, t.clone());
 
-         // Compile the function's body
-         if decl.body.is_empty() {
-            self.emit_return(&None, func_pos)
-         } else {
-            for (index, node) in decl.body.iter().enumerate() {
-               self.compile_node(node);
+      // The first element in a symbol table is always the symbol representing
+      // the function to which the symbol table belongs, or the `self` variable.
+      let symbols = SymbolTable::new(vec![match t {
+         CompilerCtx::Method => Symbol {
+            name: String::from("self"),
+            s_type: SymbolType::Class,
+            is_initialized: true,
+            depth: 0,
+            is_used: true,
+            line_info: func_pos,
+            is_captured: false,
+         },
+         _ => Symbol {
+            name: decl.name.lexeme.clone(),
+            s_type: SymbolType::Func,
+            is_initialized: true,
+            depth: 0,
+            is_used: true,
+            line_info: func_pos,
+            is_captured: false,
+         },
+      }]);
 
-               // Emit an implicit `return` if the body does not end with a return.
-               if index == decl.body.len() - 1 {
-                  match *node {
-                     ASTNode::ReturnStmt(_) => {}
-                     _ => self.emit_return(&None, func_pos),
-                  }
-               };
-            }
-         }
+      // Make this function declaration the current function scope.
+      self.functions.push(FunctionScope {
+         function: FuncObject {
+            defaults: vec![],
+            min_arity: decl.arity.0,
+            max_arity: decl.arity.1,
+            chunk: bytecode::Chunk::new(),
+            name: decl.name.lexeme.clone(),
+            up_val_count: 0,
+         },
+         s_table: symbols,
+         scope_depth: 0,
+         loops: vec![],
+         breaks: vec![],
+         up_values: vec![],
+      });
 
-         // Show a warning about unused symbols in the function body.
-         self.current_func_scope_mut().s_table.pop_scope(0, true, true);
+      // compiles the parameters so that the compiler knows about their stack position.
+      self.compile_parameters(&decl.params);
 
-         // When the 'show_bytecode' features flag is on, keep track of the
-         // previous function's up_values so that we can pretty-print the
-         // up_values captured by the closure.
-         #[cfg(feature = "show_bytecode")]
-         self.print_pretty_bytecode();
-         #[cfg(feature = "show_raw_bytecode")]
-         self.print_raw_bytecode();
+      // Compile the function's body
+      if decl.body.is_empty() {
+         self.emit_return(&None, func_pos)
+      } else {
+         for (index, node) in decl.body.iter().enumerate() {
+            self.compile_node(node);
 
-         // Takes the generated function object.
-         let function = std::mem::take(&mut self.current_func_scope_mut().function);
-         // Takes the up_values generated by the compiled function.
-         let up_values = std::mem::take(&mut self.current_func_scope_mut().up_values);
-
-         // Go back to the previous function.
-         self.functions.pop();
-         self.compiler_type = prev_compiler_type;
-
-         // Loads the function object onto the stack at runtime.
-         self.emit_function(function, up_values, &decl.name);
-
-         // Compile the named parameters so that they can be
-         // bound to the function at runtime.
-         if decl.arity.0 != decl.arity.1 {
-            self.bind_default_params(decl);
-         }
-
-         if let CompilerCtx::Method = t {
-            self.emit_bind_class_method(&decl);
-            return;
-         }
-
-         if self.is_global_scope() {
-            self.define_as_global(&decl.name);
-            self.globals.mark_initialized(parent_symbol_pos);
-         } else {
-            self
-               .current_func_scope_mut()
-               .s_table
-               .mark_initialized(parent_symbol_pos);
+            // Emit an implicit `return` if the body does not end with a return.
+            if index == decl.body.len() - 1 {
+               match *node {
+                  ASTNode::ReturnStmt(_) => {}
+                  _ => self.emit_return(&None, func_pos),
+               }
+            };
          }
       }
+
+      // Pop all the symbols from the function's symbol table.
+      self.current_s_table_mut().pop_scope(0, true, true);
+
+      // Print the compiled function's chunk when the appropriate flag is on.
+      #[cfg(feature = "show_bytecode")]
+      self.print_pretty_bytecode();
+      #[cfg(feature = "show_raw_bytecode")]
+      self.print_raw_bytecode();
+
+      // Takes the generated function object and up_values
+      let function = std::mem::take(&mut self.current_func_scope_mut().function);
+      let up_values = std::mem::take(&mut self.current_func_scope_mut().up_values);
+
+      // Go back to the previous function.
+      self.functions.pop();
+      self.compiler_type = prev_compiler_type;
+
+      // Loads the function object onto the stack at runtime.
+      self.emit_function(function, up_values, &decl.name);
+
+      if decl.arity.0 != decl.arity.1 {
+         self.bind_default_params(decl);
+      }
+
+      if let CompilerCtx::Class = self.compiler_type {
+         self.emit_op_code(OpCode::AppendMethod, func_pos);
+      }
+
+      if self.is_global_scope() {
+         self.define_as_global(&decl.name);
+      }
+
+      self.current_s_table_mut().mark_initialized(parent_symbol_pos);
    }
 
    /// Emits the appropriate code to either load a function object from the constant or create
@@ -181,11 +181,6 @@ impl Compiler {
       }
    }
 
-   fn emit_bind_class_method(&mut self, decl: &FunctionDeclNode) {
-      self.emit_op_code(OpCode::BindMethod, (decl.name.line_num, decl.name.column_start));
-      // TODO: The function must be marked as initialized in the class's symbol table
-   }
-
    /// Emits bytecode to bind the default values for the named parameters of a function.
    ///
    /// # Parameters
@@ -221,14 +216,11 @@ impl Compiler {
    /// Compiles the parameter declaration statements of a function.
    pub(super) fn compile_parameters(&mut self, params: &[Parameter]) {
       for param in params.iter() {
-         match self.declare_symbol(&param.name, SymbolType::Param) {
-            // Do nothing after the parameter has been declared. Default
-            // values will be compiled by the function's parent scope.
-            Ok(_) => {}
+         if self.declare_symbol(&param.name, SymbolType::Param).is_err() {
             // We do nothing if there was an error because the `declare_symbol()`
             // function takes care of reporting the appropriate error for us.
             // Explicit `return` to stop the loop.
-            Err(_) => return,
+            return;
          }
       }
    }
@@ -260,11 +252,7 @@ impl Compiler {
       }
 
       let depth = self.relative_scope_depth();
-
-      let symbols = self
-         .current_func_scope_mut()
-         .s_table
-         .pop_scope(depth, false, false);
+      let symbols = self.current_s_table_mut().pop_scope(depth, false, false);
 
       for (i, is_captured) in symbols.iter().rev().enumerate() {
          if *is_captured {

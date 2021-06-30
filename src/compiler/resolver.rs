@@ -141,7 +141,9 @@ impl Compiler {
 
       let sym_type = match s.0.s_type {
          SymbolType::Var => "variable",
+         SymbolType::VarField => "variable class field",
          SymbolType::Const => "constant",
+         SymbolType::ConstField => "constant class field",
          SymbolType::Func => "function",
          _ => unreachable!("Symbol should have been initialized by now."),
       };
@@ -168,8 +170,10 @@ impl Compiler {
          SymbolType::Const => "Constants are immutable.",
          SymbolType::Func => "Functions are immutable.",
          SymbolType::Class => "Classes are immutable.",
+         SymbolType::ConstField => "Constant class fields are immutable.",
+         SymbolType::Method => "Class methods are immutable.",
          // Only variables & parameters are re-assignable
-         SymbolType::Var | SymbolType::Param => return Ok(()),
+         SymbolType::Var | SymbolType::VarField | SymbolType::Param => return Ok(()),
       };
 
       self.error_at_token(t, CompilerErrorType::Reassignment, message);

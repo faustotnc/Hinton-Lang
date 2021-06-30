@@ -69,7 +69,7 @@ impl Compiler {
          &stmt.token,
          SymbolType::Const,
       ) {
-         Ok(symbol_pos) => self.current_func_scope_mut().s_table.mark_initialized(symbol_pos),
+         Ok(symbol_pos) => self.current_s_table_mut().mark_initialized(symbol_pos),
          Err(_) => return,
       }
 
@@ -87,7 +87,7 @@ impl Compiler {
 
       // Declares the loop's identifier.
       match self.declare_symbol(&stmt.id.token, SymbolType::Var) {
-         Ok(symbol_pos) => self.current_func_scope_mut().s_table.mark_initialized(symbol_pos),
+         Ok(symbol_pos) => self.current_s_table_mut().mark_initialized(symbol_pos),
          Err(_) => return,
       }
 
@@ -116,7 +116,7 @@ impl Compiler {
 
    /// Compiles a `break` statement.
    pub(super) fn compile_loop_branching_stmt(&mut self, stmt: &LoopBranchStmtNode) {
-      if self.current_function_scope().loops.is_empty() {
+      if self.current_func_scope().loops.is_empty() {
          self.error_at_token(
             &stmt.token,
             CompilerErrorType::Syntax,
@@ -128,7 +128,7 @@ impl Compiler {
          return;
       }
 
-      let current_loop = *self.current_function_scope().loops.last().unwrap();
+      let current_loop = *self.current_func_scope().loops.last().unwrap();
       let mut popped_scope =
          self
             .current_func_scope_mut()
@@ -171,7 +171,7 @@ impl Compiler {
       // Looks for any break statements associated with this loop
       let mut breaks: Vec<usize> = vec![];
       for b in self
-         .current_function_scope()
+         .current_func_scope()
          .breaks
          .iter()
          .filter(|br| br.parent_loop.position == loop_start)

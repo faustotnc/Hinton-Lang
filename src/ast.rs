@@ -20,6 +20,7 @@ pub enum ASTNode {
    VarReassignment(VarReassignmentExprNode),
    Instance(FunctionCallExprNode),
    Dictionary(DictionaryExprNode),
+   SelfExpr(SelfExprNode),
 
    // Declarations
    ClassDecl(ClassDeclNode),
@@ -270,9 +271,24 @@ pub struct ReturnStmtNode {
 #[derive(Clone)]
 pub struct ClassDeclNode {
    pub name: Token,
-   pub methods: Vec<FunctionDeclNode>,
-   pub var_fields: Vec<VariableDeclNode>,
-   pub const_fields: Vec<ConstantDeclNode>,
+   pub members: Vec<ClassMemberDeclNode>,
+}
+
+#[derive(Clone)]
+pub enum ClassMemberDecl {
+   Var(VariableDeclNode),
+   Const(ConstantDeclNode),
+   Method(FunctionDeclNode),
+}
+
+#[derive(Clone)]
+pub struct ClassMemberDeclNode {
+   pub member_type: ClassMemberDecl,
+}
+
+#[derive(Clone)]
+pub struct SelfExprNode {
+   pub token: Token,
 }
 
 #[derive(Clone)]

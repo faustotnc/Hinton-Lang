@@ -18,6 +18,9 @@ var a = [1, 1 + 1, ["a", "b", "c", "d"], true, false, null];
 var b = 1;
 assert_eq(a[2][b], "b");
 
+// Test for array equality
+assert_eq(a, [1, 2, ["a", "b", "c", "d"], true, false, null]);
+assert_ne(a, [1, 2, ["a", "b", "c", "e"], true, false, null]);
 
 // Test function returns with optional parameters
 func myFunction(a, b?, c := "named parameter") {
@@ -202,3 +205,37 @@ while n < 10 {
 }
 // Make sure the loop did not break early.
 assert_eq(ith, 5);
+
+// Basic tetsing for classes
+class Person {
+    var name;
+    
+    func set_name(name) {
+        self.name = name;
+    }
+
+    func get_name() {
+        return self.name;
+    }
+}
+
+var p1 = new Person();
+var p2 = new Person();
+
+assert_eq(p1.get_name(), null);
+assert_eq(null, p1.get_name());
+
+p1.set_name("Karoline");
+assert_eq(p1.get_name(), "Karoline");
+
+p1.set_name(p1.get_name());
+assert_eq("Karoline", p1.get_name());
+
+assert_eq(p2.get_name(), null);
+assert_eq(null, p2.get_name());
+
+p2.set_name("Hunter");
+assert_eq(p2.get_name(), "Hunter");
+
+p2.set_name(p2.get_name());
+assert_eq("Hunter", p2.get_name());

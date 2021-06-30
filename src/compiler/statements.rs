@@ -1,7 +1,7 @@
 use crate::ast::*;
 use crate::bytecode::OpCode;
-use crate::compiler::symbols::{Symbol, SymbolType};
-use crate::compiler::{Compiler, CompilerCtx};
+use crate::compiler::symbols::{Symbol, SymbolTable, SymbolType};
+use crate::compiler::{ClassScope, Compiler, CompilerCtx};
 use crate::errors::CompilerErrorType;
 use crate::lexer::tokens::Token;
 use crate::objects::Object;
@@ -16,24 +16,60 @@ impl Compiler {
 
    /// Compiles a variable declaration.
    pub(super) fn compile_variable_decl(&mut self, decl: &VariableDeclNode) {
+      // Get the symbol type for the function declaration.
+      let s_type = if let CompilerCtx::Class = self.compiler_type {
+         SymbolType::VarField
+      } else {
+         SymbolType::Var
+      };
+
       for id in decl.identifiers.iter() {
-         if let Ok(symbol_pos) = self.declare_symbol(id, SymbolType::Var) {
+         if let Ok(symbol_pos) = self.declare_symbol(id, s_type.clone()) {
             self.compile_node(&decl.value);
+
+            // If the compiler is currently compiling a class, append the variable to the class.
+            if let CompilerCtx::Class = self.compiler_type {
+               if self
+                  .add_literal_to_pool(Object::String(id.lexeme.clone()), id, true)
+                  .is_some()
+               {
+                  self.emit_op_code(OpCode::AppendVarField, (id.line_num, id.column_start));
+               }
+            }
 
             if self.is_global_scope() {
                self.define_as_global(id);
-               self.globals.mark_initialized(symbol_pos);
-            } else {
-               self.current_func_scope_mut().s_table.mark_initialized(symbol_pos);
             }
+
+            self.current_s_table_mut().mark_initialized(symbol_pos)
          }
       }
    }
 
    /// Compiles a constant declaration.
    pub(super) fn compile_constant_decl(&mut self, decl: &ConstantDeclNode) {
-      if self.declare_symbol(&decl.name, SymbolType::Const).is_ok() {
+      // Get the symbol type for the function declaration.
+      let s_type = if let CompilerCtx::Class = self.compiler_type {
+         SymbolType::ConstField
+      } else {
+         SymbolType::Const
+      };
+
+      if self.declare_symbol(&decl.name, s_type).is_ok() {
          self.compile_node(&decl.value);
+
+         // If the compiler is currently compiling a class, append the variable to the class.
+         if let CompilerCtx::Class = self.compiler_type {
+            if self
+               .add_literal_to_pool(Object::String(decl.name.lexeme.clone()), &decl.name, true)
+               .is_some()
+            {
+               self.emit_op_code(
+                  OpCode::AppendConstField,
+                  (decl.name.line_num, decl.name.column_start),
+               );
+            }
+         }
 
          if self.is_global_scope() {
             self.define_as_global(&decl.name);
@@ -66,20 +102,18 @@ impl Compiler {
    pub(super) fn declare_symbol(&mut self, token: &Token, symbol_type: SymbolType) -> Result<usize, ()> {
       let depth = self.relative_scope_depth();
 
-      if let Some(symbol) = self.current_func_scope_mut().s_table.lookup(&token.lexeme, depth) {
-         match symbol.s_type {
-            SymbolType::Var | SymbolType::Const | SymbolType::Func | SymbolType::Class => self
-               .error_at_token(
-                  &token,
-                  CompilerErrorType::Duplication,
-                  &format!("Duplicate definition for identifier '{}'", token.lexeme),
-               ),
-            SymbolType::Param => self.error_at_token(
-               &token,
-               CompilerErrorType::Duplication,
-               &format!("Duplicate definition for parameter '{}'", token.lexeme),
-            ),
-         }
+      if let Some(symbol) = self.current_s_table_mut().lookup(&token.lexeme, depth) {
+         let msg = match symbol.s_type {
+            SymbolType::Param => "parameter",
+            SymbolType::Method | SymbolType::VarField | SymbolType::ConstField => "class member",
+            _ => "identifier",
+         };
+
+         self.error_at_token(
+            &token,
+            CompilerErrorType::Duplication,
+            &format!("Duplicate definition for {} '{}'.", msg, token.lexeme),
+         );
 
          return Err(());
       }
@@ -101,7 +135,15 @@ impl Compiler {
       let symbol = Symbol {
          name: name.to_string(),
          depth: self.relative_scope_depth(),
-         is_initialized: !matches!(st, SymbolType::Var | SymbolType::Const | SymbolType::Func),
+         is_initialized: !matches!(
+            st,
+            SymbolType::Var
+               | SymbolType::Const
+               | SymbolType::Func
+               | SymbolType::ConstField
+               | SymbolType::Method
+               | SymbolType::VarField
+         ),
          s_type: st,
          is_used: false,
          line_info: (token.line_num, token.column_start),
@@ -112,7 +154,7 @@ impl Compiler {
          self.globals.push(symbol);
          Ok(self.globals.len() - 1)
       } else {
-         if self.current_func_scope_mut().s_table.len() >= (u16::MAX as usize) {
+         if self.current_s_table().len() >= (u16::MAX as usize) {
             self.error_at_token(
                &token,
                CompilerErrorType::MaxCapacity,
@@ -121,8 +163,8 @@ impl Compiler {
             return Err(());
          }
 
-         self.current_func_scope_mut().s_table.push(symbol);
-         Ok(self.current_func_scope_mut().s_table.len() - 1)
+         self.current_s_table_mut().push(symbol);
+         Ok(self.current_s_table().len() - 1)
       }
    }
 
@@ -236,28 +278,46 @@ impl Compiler {
          let str_name = Object::String(decl.name.lexeme.clone());
          let name_line_info = (decl.name.line_num, decl.name.column_start);
 
-         if let Some(name_pool_pos) = self.add_literal_to_pool(str_name, &decl.name, false) {
-            // Make the class object at runtime.
-            if name_pool_pos < 256 {
-               self.emit_op_code_with_byte(OpCode::MakeClass, name_pool_pos as u8, name_line_info)
-            } else {
-               self.emit_op_code_with_short(OpCode::MakeClass, name_pool_pos, name_line_info)
-            }
+         // Adds this class to the list of class scopes
+         self.classes.push(ClassScope {
+            members: SymbolTable::new(vec![]),
+         });
 
-            // Emits the class methods
-            self.emit_methods(&decl.methods);
+         // Adds the class's name to the pool
+         let name_pool_pos = match self.add_literal_to_pool(str_name, &decl.name, false) {
+            Some(p) => p,
+            None => return,
+         };
 
-            // Define the class as a global symbol if we are in the global scope.
-            if self.is_global_scope() {
-               self.define_as_global(&decl.name);
+         // Changes the compiler's context to a class
+         let prev_compiler_type = std::mem::replace(&mut self.compiler_type, CompilerCtx::Class);
+
+         // Make the class object at runtime.
+         if name_pool_pos < 256 {
+            self.emit_op_code_with_byte(OpCode::MakeClass, name_pool_pos as u8, name_line_info)
+         } else {
+            self.emit_op_code_with_short(OpCode::MakeClass, name_pool_pos, name_line_info)
+         }
+
+         // Emits the class methods
+         for method in decl.members.iter() {
+            match &method.member_type {
+               ClassMemberDecl::Var(v) => self.compile_variable_decl(v),
+               ClassMemberDecl::Const(c) => self.compile_constant_decl(c),
+               ClassMemberDecl::Method(m) => self.compile_function_decl(m, CompilerCtx::Method),
             }
          }
-      }
-   }
 
-   fn emit_methods(&mut self, methods: &[FunctionDeclNode]) {
-      for m in methods {
-         self.compile_function_decl(m, CompilerCtx::Method);
+         // Return the compiler to its previous context
+         self.compiler_type = prev_compiler_type;
+
+         // Define the class as a global symbol if we are in the global scope.
+         if self.is_global_scope() {
+            self.define_as_global(&decl.name);
+         }
+
+         // Removes this class from the list of class scopes.
+         self.classes.pop();
       }
    }
 }

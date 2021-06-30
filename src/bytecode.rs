@@ -13,6 +13,9 @@ pub enum OpCode {
    // Although these instructions do not have any bytecode operands, some of them do have object
    // operands from the stack.
    Add,
+   AppendConstField,
+   AppendMethod,
+   AppendVarField,
    BitwiseAnd,
    BitwiseNot,
    BitwiseOr,
@@ -47,7 +50,6 @@ pub enum OpCode {
    PopStackTop,
    Return,
    Subtract,
-   BindMethod,
 
    // Instructions with one chunk operands.
    // These instructions use the next byte
@@ -294,7 +296,6 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
       print!("{:>05} ", idx);
 
       // Prints the instruction name
-      let op_code_name;
       let mut operand_val = String::from("");
 
       // Reads two bytes as the index of a constant
@@ -319,268 +320,270 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
          }
       };
 
-      match FromPrimitive::from_u8(code).unwrap() {
-         OpCode::Add => op_code_name = "ADD",
-         OpCode::BindMethod => op_code_name = "BIND_METHOD",
-         OpCode::BitwiseAnd => op_code_name = "BIT_AND",
-         OpCode::BitwiseNot => op_code_name = "BIT_NOT",
-         OpCode::BitwiseOr => op_code_name = "BIT_OR",
-         OpCode::BitwiseShiftLeft => op_code_name = "BIT_SHIFT_L",
-         OpCode::BitwiseShiftRight => op_code_name = "BIT_SHIFT_R",
-         OpCode::BitwiseXor => op_code_name = "BIT_XOR",
-         OpCode::Divide => op_code_name = "DIVIDE",
-         OpCode::EndVirtualMachine => op_code_name = "END_VIRTUAL_MACHINE",
-         OpCode::Equals => op_code_name = "EQUALS",
-         OpCode::Expo => op_code_name = "EXPO",
-         OpCode::GreaterThan => op_code_name = "GREATER_THAN",
-         OpCode::GreaterThanEq => op_code_name = "GREATER_THAN_EQ",
-         OpCode::Indexing => op_code_name = "INDEXING",
-         OpCode::LessThan => op_code_name = "LESS_THAN",
-         OpCode::LessThanEq => op_code_name = "LESS_THAN_EQ",
-         OpCode::LoadImm0F => op_code_name = "LOAD_IMM_0F",
-         OpCode::LoadImm0I => op_code_name = "LOAD_IMM_0I",
-         OpCode::LoadImm1F => op_code_name = "LOAD_IMM_1F",
-         OpCode::LoadImm1I => op_code_name = "LOAD_IMM_1I",
-         OpCode::LoadImmFalse => op_code_name = "LOAD_IMM_FALSE",
-         OpCode::LoadImmNull => op_code_name = "LOAD_IMM_NULL",
-         OpCode::LoadImmTrue => op_code_name = "LOAD_IMM_TRUE",
-         OpCode::LogicNot => op_code_name = "LOGIC_NOT",
-         OpCode::MakeIter => op_code_name = "MAKE_ITER",
-         OpCode::MakeRange => op_code_name = "MAKE_RANGE",
-         OpCode::Modulus => op_code_name = "MODULUS",
-         OpCode::Multiply => op_code_name = "MULTIPLY",
-         OpCode::Negate => op_code_name = "NEGATE",
-         OpCode::NotEq => op_code_name = "NOT_EQ",
-         OpCode::NullishCoalescing => op_code_name = "NULLISH",
-         OpCode::PopCloseUpVal => op_code_name = "POP_CLOSE_UP_VAL",
-         OpCode::PopStackTop => op_code_name = "POP_STACK_TOP",
-         OpCode::Return => op_code_name = "RETURN",
-         OpCode::Subtract => op_code_name = "SUBTRACT",
+      let op_code_name = match FromPrimitive::from_u8(code).unwrap() {
+         OpCode::Add => "ADD",
+         OpCode::AppendConstField => "APPEND_CONST_FIELD",
+         OpCode::AppendMethod => "APPEND_METHOD",
+         OpCode::AppendVarField => "APPEND_VAR_FIELD",
+         OpCode::BitwiseAnd => "BIT_AND",
+         OpCode::BitwiseNot => "BIT_NOT",
+         OpCode::BitwiseOr => "BIT_OR",
+         OpCode::BitwiseShiftLeft => "BIT_SHIFT_L",
+         OpCode::BitwiseShiftRight => "BIT_SHIFT_R",
+         OpCode::BitwiseXor => "BIT_XOR",
+         OpCode::Divide => "DIVIDE",
+         OpCode::EndVirtualMachine => "END_VIRTUAL_MACHINE",
+         OpCode::Equals => "EQUALS",
+         OpCode::Expo => "EXPO",
+         OpCode::GreaterThan => "GREATER_THAN",
+         OpCode::GreaterThanEq => "GREATER_THAN_EQ",
+         OpCode::Indexing => "INDEXING",
+         OpCode::LessThan => "LESS_THAN",
+         OpCode::LessThanEq => "LESS_THAN_EQ",
+         OpCode::LoadImm0F => "LOAD_IMM_0F",
+         OpCode::LoadImm0I => "LOAD_IMM_0I",
+         OpCode::LoadImm1F => "LOAD_IMM_1F",
+         OpCode::LoadImm1I => "LOAD_IMM_1I",
+         OpCode::LoadImmFalse => "LOAD_IMM_FALSE",
+         OpCode::LoadImmNull => "LOAD_IMM_NULL",
+         OpCode::LoadImmTrue => "LOAD_IMM_TRUE",
+         OpCode::LogicNot => "LOGIC_NOT",
+         OpCode::MakeIter => "MAKE_ITER",
+         OpCode::MakeRange => "MAKE_RANGE",
+         OpCode::Modulus => "MODULUS",
+         OpCode::Multiply => "MULTIPLY",
+         OpCode::Negate => "NEGATE",
+         OpCode::NotEq => "NOT_EQ",
+         OpCode::NullishCoalescing => "NULLISH",
+         OpCode::PopCloseUpVal => "POP_CLOSE_UP_VAL",
+         OpCode::PopStackTop => "POP_STACK_TOP",
+         OpCode::Return => "RETURN",
+         OpCode::Subtract => "SUBTRACT",
 
          // OpCodes with 1 operand
          OpCode::BindDefaults => {
-            op_code_name = "BIND_DEFAULTS";
             get_operand(1);
+            "BIND_DEFAULTS"
          }
          OpCode::FuncCall => {
-            op_code_name = "FUNC_CALL";
             get_operand(1);
+            "FUNC_CALL"
          }
          OpCode::GetLocal => {
-            op_code_name = "GET_LOCAL";
             get_operand(1);
+            "GET_LOCAL"
          }
          OpCode::LoadConstant => {
-            op_code_name = "LOAD_CONSTANT";
             get_operand(1);
             operand_val += &format!(" -> ({})", const_val(idx, false));
+            "LOAD_CONSTANT"
          }
          OpCode::DefineGlobal => {
-            op_code_name = "DEFINE_GLOBAL";
             get_operand(1);
             operand_val += &format!(" -> '{}'", const_val(idx, false));
+            "DEFINE_GLOBAL"
          }
          OpCode::GetGlobal => {
-            op_code_name = "GET_GLOBAL";
             get_operand(1);
             operand_val += &format!(" -> '{}'", const_val(idx, false));
+            "GET_GLOBAL"
          }
          OpCode::MakeClass => {
-            op_code_name = "MAKE_CLASS";
             get_operand(1);
             operand_val += &format!(" -> '{}'", const_val(idx, false));
+            "MAKE_CLASS"
          }
          OpCode::MakeInstance => {
-            op_code_name = "MAKE_INSTANCE";
             get_operand(1);
             operand_val += &format!(" -> '{}'", const_val(idx, false));
+            "MAKE_INSTANCE"
          }
          OpCode::GetProp => {
-            op_code_name = "GET_PROPERTY";
             get_operand(1);
             operand_val += &format!(" -> '{}'", const_val(idx, false));
+            "GET_PROPERTY"
          }
          OpCode::SetProp => {
-            op_code_name = "SET_PROPERTY";
             get_operand(1);
             operand_val += &format!(" -> '{}'", const_val(idx, false));
+            "SET_PROPERTY"
          }
          OpCode::SetGlobal => {
-            op_code_name = "SET_GLOBAL";
             get_operand(1);
             operand_val += &format!(" -> '{}'", const_val(idx, false));
+            "SET_GLOBAL"
          }
          OpCode::LoadImmN => {
-            op_code_name = "LOAD_IMM_N";
             get_operand(1);
+            "LOAD_IMM_N"
          }
          OpCode::LoopJump => {
-            op_code_name = "LOOP_JUMP";
             idx += 1;
             // `idx + 1` because at runtime, the IP points to the next instruction
             operand_val = format!("{}", (idx + 1) - chunk.get_byte(idx) as usize);
             operand_val += &format!(" (sub {} from IP)", chunk.get_byte(idx));
+            "LOOP_JUMP"
          }
          OpCode::MakeArray => {
-            op_code_name = "MAKE_ARRAY";
             get_operand(1);
+            "MAKE_ARRAY"
          }
          OpCode::MakeTuple => {
-            op_code_name = "MAKE_TUPLE";
             get_operand(1);
+            "MAKE_TUPLE"
          }
          OpCode::MakeDict => {
-            op_code_name = "MAKE_DICT";
             get_operand(1);
+            "MAKE_DICT"
          }
          OpCode::SetLocal => {
-            op_code_name = "SET_LOCAL";
             get_operand(1);
+            "SET_LOCAL"
          }
          OpCode::GetUpVal => {
-            op_code_name = "GET_UP_VAL";
             get_operand(1);
+            "GET_UP_VAL"
          }
          OpCode::SetUpVal => {
-            op_code_name = "SET_UP_VAL";
             get_operand(1);
+            "SET_UP_VAL"
          }
          OpCode::CloseUpVal => {
-            op_code_name = "CLOSE_UP_VAL";
             get_operand(1);
+            "CLOSE_UP_VAL"
          }
          OpCode::LoadNative => {
-            op_code_name = "LOAD_NATIVE";
             get_operand(1);
             operand_val += &format!(" -> '{}'", natives[chunk.get_byte(idx) as usize]);
+            "LOAD_NATIVE"
          }
 
          // OpCode with 2 operands
          OpCode::GetLocalLong => {
-            op_code_name = "GET_LOCAL_LONG";
             get_operand(2);
+            "GET_LOCAL_LONG"
          }
          OpCode::JumpForward => {
-            op_code_name = "JUMP_FORWARD";
             idx += 2;
             let offset = chunk.get_short(idx - 1) as usize;
             // `idx + 1` because at runtime, the IP points to the next instruction
             operand_val = format!("{} (add {} to IP)", (idx + 1) + offset, offset);
+            "JUMP_FORWARD"
          }
          OpCode::ForIterNextOrJump => {
-            op_code_name = "FOR_ITER_NEXT_OR_JUMP";
             idx += 2;
             let offset = chunk.get_short(idx - 1) as usize;
             // `idx + 1` because at runtime, the IP points to the next instruction
             operand_val = format!("{} (add {} to IP)", (idx + 1) + offset, offset);
+            "FOR_ITER_NEXT_OR_JUMP"
          }
          OpCode::JumpIfFalseOrPop => {
-            op_code_name = "JUMP_IF_FALSE_OR_POP";
             get_operand(2);
+            "JUMP_IF_FALSE_OR_POP"
          }
          OpCode::JumpIfTrueOrPop => {
-            op_code_name = "JUMP_IF_TRUE_OR_POP";
             get_operand(2);
+            "JUMP_IF_TRUE_OR_POP"
          }
          OpCode::LoadConstantLong => {
-            op_code_name = "LOAD_CONSTANT_LONG";
             get_operand(2);
             operand_val += &format!(" -> ({})", const_val(idx - 1, true));
+            "LOAD_CONSTANT_LONG"
          }
          OpCode::DefineGlobalLong => {
-            op_code_name = "DEFINE_GLOBAL_LONG";
             get_operand(2);
             operand_val += &format!(" -> '{}'", const_val(idx - 1, true));
+            "DEFINE_GLOBAL_LONG"
          }
          OpCode::GetGlobalLong => {
-            op_code_name = "GET_GLOBAL_LONG";
             get_operand(2);
             operand_val += &format!(" -> '{}'", const_val(idx - 1, true));
+            "GET_GLOBAL_LONG"
          }
          OpCode::SetGlobalLong => {
-            op_code_name = "GET_GLOBAL_LONG";
             get_operand(2);
             operand_val += &format!(" -> '{}'", const_val(idx - 1, true));
+            "GET_GLOBAL_LONG"
          }
          OpCode::LoadImmNLong => {
-            op_code_name = "LOAD_IMM_N_LONG";
             get_operand(2);
+            "LOAD_IMM_N_LONG"
          }
          OpCode::LoopJumpLong => {
-            op_code_name = "LOOP_JUMP_LONG";
             idx += 2;
             let offset = chunk.get_short(idx - 1) as usize;
             // `idx + 1` because at runtime, the IP points to the next instruction
             operand_val = format!("{} (sub {} from IP)", (idx + 1) - offset, offset);
+            "LOOP_JUMP_LONG"
          }
          OpCode::MakeArrayLong => {
-            op_code_name = "MAKE_ARRAY_LONG";
             get_operand(2);
+            "MAKE_ARRAY_LONG"
          }
          OpCode::MakeTupleLong => {
-            op_code_name = "MAKE_TUPLE_LONG";
             get_operand(2);
+            "MAKE_TUPLE_LONG"
          }
          OpCode::MakeDictLong => {
-            op_code_name = "MAKE_DICT_LONG";
             get_operand(2);
+            "MAKE_DICT_LONG"
          }
          OpCode::PopJumpIfFalse => {
-            op_code_name = "POP_JUMP_IF_FALSE";
             idx += 2;
             let offset = chunk.get_short(idx - 1) as usize;
             // `idx + 1` because at runtime, the IP points to the next instruction
             operand_val = format!("{} (add {} to IP)", (idx + 1) + offset, offset);
+            "POP_JUMP_IF_FALSE"
          }
          OpCode::SetLocalLong => {
-            op_code_name = "SET_LOCAL_LONG";
             get_operand(2);
+            "SET_LOCAL_LONG"
          }
          OpCode::GetUpValLong => {
-            op_code_name = "GET_UP_VAL_LONG";
             get_operand(2);
+            "GET_UP_VAL_LONG"
          }
          OpCode::SetUpValLong => {
-            op_code_name = "SET_UP_VAL_LONG";
             get_operand(2);
+            "SET_UP_VAL_LONG"
          }
          OpCode::CloseUpValLong => {
-            op_code_name = "CLOSE_UP_VAL_LONG";
             get_operand(2);
+            "CLOSE_UP_VAL_LONG"
          }
          OpCode::MakeClassLong => {
-            op_code_name = "MAKE_CLASS_LONG";
             get_operand(2);
             operand_val += &format!(" -> ({})", const_val(idx - 1, true));
+            "MAKE_CLASS_LONG"
          }
          OpCode::GetPropLong => {
-            op_code_name = "GET_PROPERTY_LONG";
             get_operand(2);
             operand_val += &format!(" -> '{}'", const_val(idx, true));
+            "GET_PROPERTY_LONG"
          }
          OpCode::SetPropLong => {
-            op_code_name = "SET_PROPERTY_LONG";
             get_operand(2);
             operand_val += &format!(" -> '{}'", const_val(idx, true));
+            "SET_PROPERTY_LONG"
          }
 
          OpCode::MakeClosure | OpCode::MakeClosureLong => {
             let up_value_count;
-            if let OpCode::MakeClosure = FromPrimitive::from_u8(code).unwrap() {
-               op_code_name = "MAKE_CLOSURE";
+            let op_name = if let OpCode::MakeClosure = FromPrimitive::from_u8(code).unwrap() {
                get_operand(1);
 
                let obj = const_val(idx, false);
                up_value_count = obj.as_function().unwrap().borrow().up_val_count;
                operand_val += &format!(" -> '{}'", obj);
+               "MAKE_CLOSURE"
             } else {
-               op_code_name = "MAKE_CLOSURE_LONG";
                get_operand(2);
 
                let obj = const_val(idx, true);
                up_value_count = obj.as_function().unwrap().borrow().up_val_count;
                operand_val += &format!(" -> '{}'", obj);
-            }
+               "MAKE_CLOSURE_LONG"
+            };
 
             for i in 0..up_value_count {
                if i <= (up_value_count - 1) {
@@ -596,25 +599,27 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
 
                idx += 2;
             }
+
+            op_name
          }
 
          OpCode::MakeClosureLarge | OpCode::MakeClosureLongLarge => {
             let up_value_count;
-            if let OpCode::MakeClosureLarge = FromPrimitive::from_u8(code).unwrap() {
-               op_code_name = "MAKE_CLOSURE_LARGE";
+            let op_name = if let OpCode::MakeClosureLarge = FromPrimitive::from_u8(code).unwrap() {
                get_operand(1);
 
                let obj = const_val(idx, false);
                up_value_count = obj.as_function().unwrap().borrow().up_val_count;
                operand_val += &format!(" -> '{}'", obj);
+               "MAKE_CLOSURE_LARGE"
             } else {
-               op_code_name = "MAKE_CLOSURE_LONG_LARGE";
                get_operand(2);
 
                let obj = const_val(idx, true);
                up_value_count = obj.as_function().unwrap().borrow().up_val_count;
                operand_val += &format!(" -> '{}'", obj);
-            }
+               "MAKE_CLOSURE_LONG_LARGE"
+            };
 
             for i in 0..up_value_count {
                if i <= (up_value_count - 1) {
@@ -630,8 +635,10 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
 
                idx += 3;
             }
+
+            op_name
          }
-      }
+      };
 
       // Prints the instruction code and instruction name
       println!(
