@@ -304,7 +304,13 @@ impl Compiler {
             match &method.member_type {
                ClassMemberDecl::Var(v) => self.compile_variable_decl(v),
                ClassMemberDecl::Const(c) => self.compile_constant_decl(c),
-               ClassMemberDecl::Method(m) => self.compile_function_decl(m, CompilerCtx::Method),
+               ClassMemberDecl::Method(m) => {
+                  if m.name.lexeme == "init" {
+                     self.compile_function_decl(m, CompilerCtx::Init)
+                  } else {
+                     self.compile_function_decl(m, CompilerCtx::Method)
+                  }
+               }
             }
          }
 

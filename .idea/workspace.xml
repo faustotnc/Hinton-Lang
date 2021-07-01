@@ -20,20 +20,13 @@
   <component name="ChangeListManager">
     <list default="true" id="01377ebb-e361-4782-8382-eca9171c4216" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ast.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/ast.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/bytecode.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bytecode.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/compiler/expressions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/expressions.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/compiler/functions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/functions.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/loops.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/loops.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/compiler/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/resolver.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/resolver.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/compiler/statements.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/statements.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/symbols.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/symbols.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/objects/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/parser/expressions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/expressions.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/parser/statements.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/statements.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/tests/compiler.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/tests/compiler.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/tests/hinton/test.ht" beforeDir="false" afterPath="$PROJECT_DIR$/src/tests/hinton/test.ht" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/virtual_machine/run.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/virtual_machine/run.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/virtual_machine/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/virtual_machine/mod.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -65,14 +58,18 @@
     <option name="directoryName" value="j2k46s8z" />
   </component>
   <component name="ProblemsViewState">
-    <option name="selectedIndex" value="3" />
+    <option name="selectedIndex" value="2" />
   </component>
   <component name="ProjectId" id="1uHRQwqtykRYnoxSAMqKg2FF90E" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
     <property name="ASKED_SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
@@ -92,7 +89,7 @@
     <property name="project.structure.proportion" value="0.0" />
     <property name="project.structure.side.proportion" value="0.0" />
     <property name="run.code.analysis.last.selected.profile" value="pProject Default" />
-    <property name="settings.editor.selected.configurable" value="reference.settingsdialog.IDE.editor.colors.Language Defaults" />
+    <property name="settings.editor.selected.configurable" value="preferences.pluginManager" />
   </component>
   <component name="ReaderModeSettings">
     <option name="showRenderedDocs" value="false" />
@@ -103,7 +100,7 @@
       <command value="cargo check" />
     </option>
   </component>
-  <component name="RunManager" selected="Cargo.Run Hinton Test">
+  <component name="RunManager" selected="Cargo.Test">
     <configuration default="true" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" PASS_PARENT_ENVS_2="true">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -184,12 +181,15 @@
       <workItem from="1624371556260" duration="11880000" />
       <workItem from="1624453778615" duration="233000" />
       <workItem from="1624462448106" duration="57035000" />
-      <workItem from="1624733933699" duration="40065000" />
+      <workItem from="1624733933699" duration="53472000" />
     </task>
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

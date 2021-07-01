@@ -381,10 +381,23 @@ impl VirtualMachine {
       };
 
       let members = class.members.borrow_mut().clone();
-      let new_instance = Object::Instance(Rc::new(RefCell::new(InstanceObject { class, members })));
+      let new_instance = Object::Instance(Rc::new(RefCell::new(InstanceObject {
+         class,
+         members: members.clone(),
+      })));
 
       let class_pos = self.stack.len() - (arg_count as usize) - 1;
       self.stack[class_pos] = new_instance;
+
+      if let Some(c) = members.get("init") {
+         return match c {
+            Object::Closure(cls) => self.call_closure(cls.clone(), arg_count),
+            _ => RuntimeResult::Error {
+               error: RuntimeErrorType::TypeError,
+               message: String::from("Class member 'init' can only be a method."),
+            },
+         };
+      }
 
       RuntimeResult::Continue
    }

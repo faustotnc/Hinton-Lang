@@ -15,7 +15,7 @@ impl Compiler {
       let func_pos = (decl.name.line_num, decl.name.column_start);
 
       // Get the symbol type for the function declaration.
-      let s_type = if let CompilerCtx::Method = t {
+      let s_type = if matches!(t, CompilerCtx::Method | CompilerCtx::Init) {
          SymbolType::Method
       } else {
          SymbolType::Func
@@ -33,7 +33,7 @@ impl Compiler {
       // The first element in a symbol table is always the symbol representing
       // the function to which the symbol table belongs, or the `self` variable.
       let symbols = SymbolTable::new(vec![match t {
-         CompilerCtx::Method => Symbol {
+         CompilerCtx::Method | CompilerCtx::Init => Symbol {
             name: String::from("self"),
             s_type: SymbolType::Class,
             is_initialized: true,
@@ -75,7 +75,7 @@ impl Compiler {
 
       // Compile the function's body
       if decl.body.is_empty() {
-         self.emit_return(&None, func_pos)
+         self.emit_return(&None, func_pos, matches!(t, CompilerCtx::Init))
       } else {
          for (index, node) in decl.body.iter().enumerate() {
             self.compile_node(node);
@@ -84,7 +84,7 @@ impl Compiler {
             if index == decl.body.len() - 1 {
                match *node {
                   ASTNode::ReturnStmt(_) => {}
-                  _ => self.emit_return(&None, func_pos),
+                  _ => self.emit_return(&None, func_pos, matches!(t, CompilerCtx::Init)),
                }
             };
          }
@@ -236,7 +236,16 @@ impl Compiler {
          return;
       }
 
-      self.emit_return(&stmt.value, (stmt.token.line_num, stmt.token.column_start))
+      if let CompilerCtx::Init = self.compiler_type {
+         self.error_at_token(
+            &stmt.token,
+            CompilerErrorType::Syntax,
+            "Cannot return from class initializer.",
+         );
+         return;
+      }
+
+      self.emit_return(&stmt.value, (stmt.token.line_num, stmt.token.column_start), false)
    }
 
    /// Emits bytecode to return out of a function at runtime.
@@ -244,8 +253,10 @@ impl Compiler {
    /// # Parameters
    /// - `value` (Option) – The AST node of the return expression (if any).
    /// - `token_pos`: The position of the return statement in the source code.
-   fn emit_return(&mut self, value: &Option<Box<ASTNode>>, token_pos: (usize, usize)) {
-      if let Some(node) = value {
+   fn emit_return(&mut self, value: &Option<Box<ASTNode>>, token_pos: (usize, usize), init: bool) {
+      if init {
+         self.emit_op_code_with_byte(OpCode::GetLocal, 0u8, token_pos);
+      } else if let Some(node) = value {
          self.compile_node(node);
       } else {
          self.emit_op_code(OpCode::LoadImmNull, token_pos);

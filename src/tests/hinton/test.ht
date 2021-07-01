@@ -239,3 +239,26 @@ assert_eq(p2.get_name(), "Hunter");
 
 p2.set_name(p2.get_name());
 assert_eq("Hunter", p2.get_name());
+
+
+// Test class initializer
+class Vec2D {
+    var x, y;
+
+    func init(x, y) {
+        self.x = x;
+        self.y = y;
+    }
+
+    func get_x() {
+        return self.x;
+    }
+
+    func get_y() {
+        return self.y;
+    }
+}
+
+var vec = new Vec2D(3, 4);
+assert_eq(vec.get_x(), 3);
+assert_eq(vec.get_y(), 4);

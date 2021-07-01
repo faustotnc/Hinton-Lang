@@ -182,3 +182,23 @@ fn functions_have_access_to_global_vars() {
       panic!("Functions should have access to global declarations.")
    }
 }
+
+#[test]
+fn cannot_return_from_init() {
+   let src = "
+      class SomeOne {
+         func init() {
+            return \"hello\";
+         }
+      }
+    ";
+
+   let program = match Parser::parse(src) {
+      Ok(ast) => ast,
+      Err(_) => panic!("Parser Had Errors."),
+   };
+
+   if Compiler::compile_ast(&PathBuf::new(), &program, vec![]).is_ok() {
+      panic!("Compiler should emit error if program returns from class initializer.")
+   }
+}

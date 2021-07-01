@@ -432,7 +432,7 @@ impl Compiler {
    }
 
    /// Compiles a function call or new instance expression.
-   pub(super) fn compile_instance_or_func_call_expr(&mut self, expr: &FunctionCallExprNode, instance: bool) {
+   pub(super) fn compile_inst_or_func_call_expr(&mut self, expr: &FunctionCallExprNode, inst: bool) {
       // Compile the call's identifier
       self.compile_node(&expr.target);
 
@@ -442,7 +442,7 @@ impl Compiler {
       }
 
       // Call the function or create an instance at runtime
-      if instance {
+      if inst {
          self.emit_op_code_with_byte(OpCode::MakeInstance, expr.args.len() as u8, expr.pos);
       } else {
          self.emit_op_code_with_byte(OpCode::FuncCall, expr.args.len() as u8, expr.pos);

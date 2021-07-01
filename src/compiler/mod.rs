@@ -49,10 +49,11 @@ enum LoopType {
 /// to compile the AST.
 #[derive(Clone)]
 enum CompilerCtx {
-   Script,
-   Function,
-   Method,
    Class,
+   Function,
+   Init,
+   Method,
+   Script,
 }
 
 /// A special type of scope for compiling function declarations.
@@ -194,11 +195,11 @@ impl Compiler {
          ASTNode::Dictionary(x) => self.compile_dictionary(x),
          ASTNode::ExpressionStmt(x) => self.compile_expression_stmt(x),
          ASTNode::ForStmt(x) => self.compile_for_stmt(x),
-         ASTNode::FunctionCall(x) => self.compile_instance_or_func_call_expr(x, false),
+         ASTNode::FunctionCall(x) => self.compile_inst_or_func_call_expr(x, false),
          ASTNode::FunctionDecl(x) => self.compile_function_decl(x, CompilerCtx::Function),
          ASTNode::Identifier(x) => self.compile_identifier_expr(x),
          ASTNode::IfStmt(x) => self.compile_if_stmt(x),
-         ASTNode::Instance(x) => self.compile_instance_or_func_call_expr(x, true),
+         ASTNode::Instance(x) => self.compile_inst_or_func_call_expr(x, true),
          ASTNode::Literal(x) => self.compile_literal_expr(x),
          ASTNode::LoopBranch(x) => self.compile_loop_branching_stmt(x),
          ASTNode::Module(x) => self.compile_module_node(x),
