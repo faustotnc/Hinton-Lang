@@ -262,3 +262,41 @@ class Vec2D {
 var vec = new Vec2D(3, 4);
 assert_eq(vec.get_x(), 3);
 assert_eq(vec.get_y(), 4);
+
+// Test class field capture closure
+var class1;
+var class2;
+
+func wrapped_class() {
+    {
+        var a = "one";
+        
+        func one() {
+            return a;
+        }
+
+        class inner_class {
+            var field_one = one;
+        }
+        
+        class1 = inner_class;
+    }
+    
+    {
+        var a = "two";
+
+        func two() {
+            return a;
+        }
+        
+        class inner_class {
+            var field_two = two;
+        }
+        
+        class2 = inner_class;
+    }
+}
+
+wrapped_class();
+assert_eq((new class1()).field_one(), "one");
+assert_eq((new class2()).field_two(), "two");

@@ -20,11 +20,7 @@
   <component name="ChangeListManager">
     <list default="true" id="01377ebb-e361-4782-8382-eca9171c4216" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/expressions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/expressions.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/functions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/functions.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/statements.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/statements.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/tests/compiler.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/tests/compiler.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/tests/hinton/test.ht" beforeDir="false" afterPath="$PROJECT_DIR$/src/tests/hinton/test.ht" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/virtual_machine/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/virtual_machine/mod.rs" afterDir="false" />
     </list>
@@ -54,19 +50,27 @@
       <filtered-out-file-type name="COMMIT_BY_MESSAGE" />
     </file-type-list>
   </component>
+  <component name="GithubPullRequestsUISettings">
+    <option name="selectedUrlAndAccountId">
+      <UrlAndAccount>
+        <option name="accountId" value="1220aed3-c0d4-45ab-80b1-9dbac0f4c034" />
+        <option name="url" value="https://github.com/hinton-lang/Hinton.git" />
+      </UrlAndAccount>
+    </option>
+  </component>
   <component name="MacroExpansionManager">
     <option name="directoryName" value="j2k46s8z" />
-  </component>
-  <component name="ProblemsViewState">
-    <option name="selectedIndex" value="2" />
   </component>
   <component name="ProjectId" id="1uHRQwqtykRYnoxSAMqKg2FF90E" />
   <component name="ProjectLevelVcsManager">
     <ConfirmationsSetting value="2" id="Add" />
   </component>
   <component name="ProjectViewState">
+    <option name="autoscrollFromSource" value="true" />
+    <option name="compactDirectories" value="true" />
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
+    <option name="showVisibilityIcons" value="true" />
   </component>
   <component name="PropertiesComponent">
     <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
@@ -100,12 +104,7 @@
       <command value="cargo check" />
     </option>
   </component>
-  <component name="RunManager" selected="Cargo.Test">
-    <configuration default="true" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
+  <component name="RunManager" selected="Cargo.Run Hinton Test">
     <configuration name="Run Development" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="command" value="run ./development/test.ht" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -181,7 +180,9 @@
       <workItem from="1624371556260" duration="11880000" />
       <workItem from="1624453778615" duration="233000" />
       <workItem from="1624462448106" duration="57035000" />
-      <workItem from="1624733933699" duration="53472000" />
+      <workItem from="1624733933699" duration="58562000" />
+      <workItem from="1625160743276" duration="99000" />
+      <workItem from="1625160872481" duration="786000" />
     </task>
     <servers />
   </component>

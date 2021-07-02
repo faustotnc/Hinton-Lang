@@ -235,6 +235,7 @@ impl VirtualMachine {
    /// Tries to call the given object, or returns a runtime error if the object is not callable.
    fn call_object(&mut self, callee: Object, arg_count: u8) -> RuntimeResult {
       return match callee {
+         Object::ClassField(f) => self.call_object(*f.value, arg_count),
          Object::Function(obj) => self.call_function(obj, arg_count),
          Object::Closure(obj) => self.call_closure(obj, arg_count),
          Object::BoundMethod(obj) => {
