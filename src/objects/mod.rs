@@ -83,13 +83,13 @@ impl UpValRef {
 #[derive(Clone)]
 pub struct ClassObject {
    pub name: String,
-   pub members: Rc<RefCell<HashMap<String, Object>>>,
+   pub members: HashMap<String, Object>,
 }
 
 /// Represents a Hinton Instance object.
 #[derive(Clone)]
 pub struct InstanceObject {
-   pub class: ClassObject,
+   pub class: Rc<RefCell<ClassObject>>,
    pub members: HashMap<String, Object>,
 }
 
@@ -113,7 +113,7 @@ pub enum Object {
    Array(Rc<RefCell<Vec<Object>>>),
    Bool(bool),
    BoundMethod(BoundMethod),
-   Class(ClassObject),
+   Class(Rc<RefCell<ClassObject>>),
    ClassField(ClassFieldObject),
    Closure(ClosureObject),
    Dict(Rc<RefCell<HashMap<String, Object>>>),
@@ -168,8 +168,8 @@ impl Object {
          Self::Range(_) => String::from("Range"),
          Self::String(_) => String::from("String"),
          Self::Tuple(_) => String::from("Tuple"),
-         Self::Class(c) => c.name.clone(),
-         Self::Instance(i) => i.borrow().class.name.clone(),
+         Self::Class(c) => c.borrow().name.clone(),
+         Self::Instance(i) => i.borrow().class.borrow().name.clone(),
       };
    }
 
@@ -305,11 +305,69 @@ impl Object {
                false
             }
          }
+         Object::Dict(d1) => {
+            let d1 = d1.borrow();
+
+            if let Object::Dict(d2) = right {
+               let d2 = d2.borrow();
+
+               if d1.len() != d2.len() {
+                  return false;
+               }
+
+               for (key, val_1) in d1.iter() {
+                  // If the current key in d1 does not exist in d2,
+                  // then the dictionaries are not equal.
+                  let val_2 = match d2.get(key) {
+                     Some(v) => v,
+                     None => return false,
+                  };
+
+                  // If the current key's value in d1 does not equal the current
+                  // key's value in d2, then the dictionaries are not equal.
+                  if !val_1.equals(val_2) {
+                     return false;
+                  }
+               }
+
+               true
+            } else {
+               false
+            }
+         }
          Object::ClassField(c1) => {
             if let Object::ClassField(c2) = right {
                c1.value.equals(&c2.value)
             } else {
                c1.value.equals(right)
+            }
+         }
+         Object::Native(n1) => {
+            if let Object::Native(n2) = right {
+               n1.name == n2.name
+            } else {
+               false
+            }
+         }
+         Object::Function(f1) => {
+            if let Object::Function(f2) = right {
+               std::ptr::eq(&*f1.borrow(), &*f2.borrow())
+            } else {
+               false
+            }
+         }
+         Object::Closure(f1) => {
+            if let Object::Closure(f2) = right {
+               std::ptr::eq(&*f1.function.borrow(), &*f2.function.borrow())
+            } else {
+               false
+            }
+         }
+         Object::Class(c1) => {
+            if let Object::Class(c2) = right {
+               std::ptr::eq(&*c1.borrow(), &*c2.borrow())
+            } else {
+               false
             }
          }
          Object::Null => matches!(right, Object::Null),
@@ -380,16 +438,17 @@ impl<'a> fmt::Display for Object {
             )
          }
          Object::Iter(ref inner) => {
-            let str = format!("<Iterable '{}'>", inner.borrow_mut().iter.type_name());
+            let str = format!("<Iterable '{}'>", inner.borrow().iter.type_name());
             fmt::Display::fmt(&str, f)
          }
          Object::Function(ref inner) => {
-            let name = &inner.borrow_mut().name;
+            let name = &inner.borrow().name;
 
             let str = if name.is_empty() {
                String::from("<script>")
             } else {
-               format!("<Func '{}'>", name)
+               let prt_str = format!("{:p}", &*inner.borrow() as *const _);
+               format!("<Func '{}' at {}>", name, prt_str)
             };
 
             fmt::Display::fmt(&str, f)
@@ -400,7 +459,8 @@ impl<'a> fmt::Display for Object {
             let str = if name.is_empty() {
                String::from("<Func script>")
             } else {
-               format!("<Func '{}'>", name)
+               let prt_str = format!("{:p}", &*inner.function.borrow() as *const _);
+               format!("<Func '{}' at {}>", name, prt_str)
             };
 
             fmt::Display::fmt(&str, f)
@@ -411,15 +471,23 @@ impl<'a> fmt::Display for Object {
             let str = if name.is_empty() {
                String::from("<Func script>")
             } else {
-               format!("<Method '{}' in '{}'>", name, inner.receiver.borrow().class.name)
+               format!(
+                  "<Method '{}' in '{}'>",
+                  name,
+                  inner.receiver.borrow().class.borrow().name
+               )
             };
 
             fmt::Display::fmt(&str, f)
          }
-         Object::Class(ref inner) => fmt::Display::fmt(&format!("<Class '{}'>", inner.name), f),
-         Object::Instance(ref inner) => {
-            fmt::Display::fmt(&format!("<Instance of '{}'>", inner.borrow().class.name), f)
+         Object::Class(ref inner) => {
+            let prt_str = format!("{:p}", &*inner.borrow() as *const _);
+            fmt::Display::fmt(&format!("<Class '{}' at {}>", inner.borrow().name, prt_str), f)
          }
+         Object::Instance(ref inner) => fmt::Display::fmt(
+            &format!("<Instance of '{}'>", inner.borrow().class.borrow().name),
+            f,
+         ),
          Object::ClassField(ref c) => fmt::Display::fmt(c.value.as_ref(), f),
          Object::Native(ref inner) => {
             let str = format!("<NativeFn '{}'>", inner.name);

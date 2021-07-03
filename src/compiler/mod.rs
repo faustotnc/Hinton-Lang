@@ -1,5 +1,4 @@
 use crate::ast::{ASTNode, ModuleNode};
-use crate::bytecode;
 use crate::bytecode::{Chunk, OpCode};
 use crate::compiler::symbols::{Symbol, SymbolTable, SymbolType};
 use crate::errors::{CompilerErrorType, ErrorReport};
@@ -146,7 +145,7 @@ impl Compiler {
             defaults: vec![],
             min_arity: 0,
             max_arity: 0,
-            chunk: bytecode::Chunk::new(),
+            chunk: Chunk::new(),
             name: format!("<File '{}'>", filepath.to_str().unwrap()),
             up_val_count: 0,
          },
@@ -168,7 +167,7 @@ impl Compiler {
 
       // Compile the function body
       _self.compile_node(&program);
-      _self.emit_op_code(bytecode::OpCode::EndVirtualMachine, (0, 0));
+      _self.emit_op_code(OpCode::EndVirtualMachine, (0, 0));
 
       // Print the bytecode for the main function when the appropriate flag is present.
       #[cfg(feature = "show_bytecode")]
@@ -298,7 +297,7 @@ impl Compiler {
    /// Pretty-prints the compiled chunk of bytecode fot the current function.
    #[cfg(feature = "show_bytecode")]
    fn print_pretty_bytecode(&self) {
-      bytecode::disassemble_function_scope(
+      crate::bytecode::disassemble_function_scope(
          &self.current_func_scope().function.chunk,
          &self.natives,
          &self.current_func_scope().function.name,
@@ -308,7 +307,7 @@ impl Compiler {
    /// Prints the raw bytes compiled into the current function's chunk.
    #[cfg(feature = "show_raw_bytecode")]
    fn print_raw_bytecode(&self) {
-      bytecode::print_raw(
+      crate::bytecode::print_raw(
          self.current_chunk(),
          self.current_func_scope().function.name.clone().as_str(),
       );
@@ -319,7 +318,7 @@ impl Compiler {
    /// # Parameters
    /// - `instr`: The OpCode instruction to be added to the chunk.
    /// - `pos`: The source line and column associated with this OpCode.
-   fn emit_op_code(&mut self, instr: bytecode::OpCode, pos: (usize, usize)) {
+   fn emit_op_code(&mut self, instr: OpCode, pos: (usize, usize)) {
       self.current_chunk_mut().push_op_code(instr);
       self.current_chunk_mut().push_line_info(pos);
    }
@@ -351,7 +350,7 @@ impl Compiler {
    /// - `instr`: The OpCode instruction to be added to the chunk.
    /// - `byte`: The raw byte to follow the emitted instruction.
    /// - `pos`: The source line and column associated with this OpCode.
-   fn emit_op_code_with_byte(&mut self, instr: bytecode::OpCode, byte: u8, pos: (usize, usize)) {
+   fn emit_op_code_with_byte(&mut self, instr: OpCode, byte: u8, pos: (usize, usize)) {
       self.emit_op_code(instr, pos);
       self.emit_raw_byte(byte, pos);
    }
@@ -363,7 +362,7 @@ impl Compiler {
    /// - `instr`: The OpCode short instruction to be added to the chunk.
    /// - `short`: The 16-bit short instruction to add to the chunk.
    /// - `pos`: The source line and column associated with this OpCode.
-   fn emit_op_code_with_short(&mut self, instr: bytecode::OpCode, short: u16, pos: (usize, usize)) {
+   fn emit_op_code_with_short(&mut self, instr: OpCode, short: u16, pos: (usize, usize)) {
       self.emit_op_code(instr, pos);
       self.emit_raw_short(short, pos);
    }
@@ -379,7 +378,7 @@ impl Compiler {
    /// `usize`: The position of the currently emitted jump instruction in the chunk. This value
    /// should be used by the call to the `patch_jump(...)` function to patch the correct jump
    /// instruction's offset.
-   fn emit_jump(&mut self, instruction: bytecode::OpCode, token: &Token) -> usize {
+   fn emit_jump(&mut self, instruction: OpCode, token: &Token) -> usize {
       self.emit_op_code_with_short(instruction, 0xffff, (token.line_num, token.column_start));
       return self.current_chunk_mut().len() - 2;
    }
@@ -416,13 +415,13 @@ impl Compiler {
       let line_info = (token.line_num, token.column_start);
 
       if offset < (u8::MAX - 2) as usize {
-         self.emit_op_code(bytecode::OpCode::LoopJump, line_info);
+         self.emit_op_code(OpCode::LoopJump, line_info);
 
          // +2 to account for the 'OP_LOOP_JUMP' and its operand.
          let jump = (offset + 2) as u8;
          self.emit_raw_byte(jump, line_info);
       } else if offset < (u16::MAX - 3) as usize {
-         self.emit_op_code(bytecode::OpCode::LoopJumpLong, line_info);
+         self.emit_op_code(OpCode::LoopJumpLong, line_info);
 
          // +3 to account for the 'OP_LOOP_JUMP_LONG' and its operands.
          let jump = (offset + 3) as u16;

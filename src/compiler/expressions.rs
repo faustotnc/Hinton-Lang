@@ -58,11 +58,8 @@ impl Compiler {
    pub(super) fn compile_binary_expr(&mut self, expr: &BinaryExprNode) {
       // Because logic 'OR' and logic 'AND' expressions are short-circuited,
       // they are compiled by a separate function.
-      match expr.opr_type {
-         BinaryExprType::LogicAND | BinaryExprType::LogicOR => {
-            return self.compile_logic_and_or_expr(expr);
-         }
-         _ => {}
+      if matches!(expr.opr_type, BinaryExprType::LogicAND | BinaryExprType::LogicOR) {
+         return self.compile_logic_and_or_expr(expr);
       }
 
       // Compiles the binary operators.

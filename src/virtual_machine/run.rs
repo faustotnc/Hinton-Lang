@@ -373,10 +373,10 @@ impl VirtualMachine {
          _ => unreachable!("Expected string for class name."),
       };
 
-      let new_class = Object::Class(ClassObject {
+      let new_class = Object::Class(Rc::new(RefCell::new(ClassObject {
          name,
-         members: Rc::new(RefCell::new(HashMap::new())),
-      });
+         members: HashMap::new(),
+      })));
       self.push_stack(new_class)
    }
 
@@ -415,7 +415,7 @@ impl VirtualMachine {
                   message: format!(
                      "Property '{}' not defined in object of type '{}'.",
                      prop_name,
-                     x.borrow().class.name
+                     x.borrow().class.borrow().name
                   ),
                };
             }
@@ -448,7 +448,7 @@ impl VirtualMachine {
 
       return match self.pop_stack() {
          Object::Instance(inst) => {
-            let class_name = inst.borrow().class.name.clone();
+            let class_name = inst.borrow().class.borrow().name.clone();
 
             match inst.borrow_mut().members.get_mut(&prop_name) {
                Some(member) => match member {
@@ -734,8 +734,8 @@ impl VirtualMachine {
 
       match maybe_class {
          Object::Class(c) => {
-            c.members
-               .borrow_mut()
+            c.borrow_mut()
+               .members
                .insert(method_name, Object::Closure(method));
          }
          _ => unreachable!("Expected class object on TOS for method binding."),
@@ -756,7 +756,7 @@ impl VirtualMachine {
 
       match maybe_class {
          Object::Class(c) => {
-            c.members.borrow_mut().insert(
+            c.borrow_mut().members.insert(
                field_name,
                Object::ClassField(ClassFieldObject {
                   value: Box::new(field_value),
@@ -782,7 +782,7 @@ impl VirtualMachine {
 
       match maybe_class {
          Object::Class(c) => {
-            c.members.borrow_mut().insert(
+            c.borrow_mut().members.insert(
                field_name,
                Object::ClassField(ClassFieldObject {
                   value: Box::new(field_value),

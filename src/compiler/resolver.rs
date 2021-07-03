@@ -41,13 +41,15 @@ impl Compiler {
                CompilerErrorType::Reassignment,
                &format!("Cannot modify native function '{}'.", token.lexeme),
             );
-         } else {
-            self.emit_op_code_with_byte(
-               OpCode::LoadNative,
-               index as u8,
-               (token.line_num, token.column_start),
-            );
+
+            return Ok(SL::Error);
          }
+
+         self.emit_op_code_with_byte(
+            OpCode::LoadNative,
+            index as u8,
+            (token.line_num, token.column_start),
+         );
 
          return Ok(SL::Native);
       }

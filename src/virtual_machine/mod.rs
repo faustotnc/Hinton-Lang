@@ -381,9 +381,9 @@ impl VirtualMachine {
          }
       };
 
-      let members = class.members.borrow_mut().clone();
+      let members = &class.borrow().members;
       let new_instance = Object::Instance(Rc::new(RefCell::new(InstanceObject {
-         class,
+         class: class.clone(),
          members: members.clone(),
       })));
 

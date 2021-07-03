@@ -300,3 +300,72 @@ func wrapped_class() {
 wrapped_class();
 assert_eq((new class1()).field_one(), "one");
 assert_eq((new class2()).field_two(), "two");
+
+// Test for dictionary equality
+var dict1 = {
+    a: 1,
+    b: "hello",
+    c: true,
+    d: {
+        e: null,
+        f: fact,
+        g: [fact(1), fact(2), fact(3), fact(4)],
+        h: {
+            i: Person,
+            g: Vec2D
+        }
+    }
+};
+
+assert_eq(dict1, {
+    a: 1,
+    b: "hello",
+    c: true,
+    d: {
+        e: null,
+        f: fact,
+        g: [fact(1), fact(2), fact(3), fact(4)],
+        h: {
+            i: Person,
+            g: Vec2D
+        }
+    }
+});
+
+assert_ne(dict1, {
+    a: 1,
+    b: "hello",
+    c: true,
+    d: {
+        e: null,
+        f: fact,
+        g: [fact(1), fact(2), fact(3), fact(5)], // different
+        h: {
+            i: Person,
+            g: Vec2D
+        }
+    }
+});
+
+// Test for function equality
+var repeated_func_one;
+
+{
+    func repeated_func_name() {
+        print("these two functions are the same");
+    }
+
+    repeated_func_one = repeated_func_name;
+}
+
+func repeated_func_name() {
+    print("these two functions are the same");
+}
+
+var repeated_func_two = repeated_func_name;
+assert_eq(repeated_func_two, repeated_func_name);
+
+// Even though these two functions look identical, they are
+// declared in different memory locations, therefore they
+// should not be the same.
+assert_ne(repeated_func_one, repeated_func_name);

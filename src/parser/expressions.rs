@@ -22,6 +22,7 @@ use crate::ast::*;
 use crate::ast::{ASTNode, ReassignmentType};
 use crate::lexer::tokens::Token;
 use crate::lexer::tokens::TokenType::*;
+use crate::lexer::tokens::TokenType::{LOGIC_NOT_EQ, MINUS};
 use crate::objects::Object;
 use crate::parser::Parser;
 
@@ -500,7 +501,6 @@ impl<'a> Parser {
    fn parse_unary(&mut self) -> Option<ASTNode> {
       if self.matches(&LOGIC_NOT) || self.matches(&MINUS) || self.matches(&BIT_NOT) {
          let opr = self.previous.clone();
-         let expr = self.parse_unary();
 
          let opr_type = if let LOGIC_NOT = opr.token_type {
             UnaryExprType::LogicNeg
@@ -511,7 +511,7 @@ impl<'a> Parser {
          };
 
          Some(Unary(UnaryExprNode {
-            operand: match expr {
+            operand: match self.parse_expression() {
                Some(e) => Box::new(e),
                None => return None, // Could not create rhs of expression
             },
@@ -718,10 +718,10 @@ impl<'a> Parser {
       // Removes the underscores from the lexeme
       let lexeme = lexeme.replace('_', "");
       // Parses the lexeme into an integer
-      let num = isize::from_str_radix(&lexeme[2..], radix);
+      let num = i64::from_str_radix(&lexeme[2..], radix);
 
       match num {
-         Ok(x) => Ok(Object::Int(x as i64)),
+         Ok(x) => Ok(Object::Int(x)),
          Err(_) => {
             // The lexeme could not be converted to an i64.
             self.error_at_previous("Unexpected token.");
@@ -796,7 +796,7 @@ impl<'a> Parser {
       let mut keys: Vec<Token> = vec![];
       let mut values: Vec<ASTNode> = vec![];
 
-      if !self.check(&R_CURLY) {
+      if !self.matches(&R_CURLY) {
          loop {
             // Parses the key
             match self.parse_primary() {
@@ -825,6 +825,13 @@ impl<'a> Parser {
 
             // If matches a comma, consume next
             if self.matches(&COMMA) {
+               // If there is a closing curly brace after the comma, we assume it
+               // is the end of the dictionary.
+               if self.check(&R_CURLY) {
+                  self.advance();
+                  break;
+               }
+
                continue;
             }
 
