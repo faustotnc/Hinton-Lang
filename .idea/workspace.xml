@@ -19,17 +19,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="01377ebb-e361-4782-8382-eca9171c4216" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/Hinton-Lang.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/Hinton-Lang.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/ast.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/ast.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bytecode.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bytecode.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/compiler/expressions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/expressions.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/compiler/functions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/functions.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/compiler/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/resolver.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/resolver.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/lexer/tokens.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lexer/tokens.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/errors.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/errors.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/natives.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/natives.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/objects/indexing.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/indexing.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/objects/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/mod.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/parser/expressions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/expressions.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/tests/hinton/test.ht" beforeDir="false" afterPath="$PROJECT_DIR$/src/tests/hinton/test.ht" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/virtual_machine/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/virtual_machine/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/parser/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/parser/statements.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/statements.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/virtual_machine/run.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/virtual_machine/run.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -115,7 +117,7 @@
       <command value="cargo check" />
     </option>
   </component>
-  <component name="RunManager" selected="Cargo.Run Hinton Test">
+  <component name="RunManager" selected="Cargo.Run Development">
     <configuration name="Run Development" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="command" value="run ./development/test.ht" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -199,7 +201,9 @@
       <workItem from="1624733933699" duration="58562000" />
       <workItem from="1625160743276" duration="99000" />
       <workItem from="1625160872481" duration="786000" />
-      <workItem from="1625199461209" duration="19585000" />
+      <workItem from="1625199461209" duration="20625000" />
+      <workItem from="1625334490569" duration="35000" />
+      <workItem from="1625336521311" duration="10846000" />
     </task>
     <servers />
   </component>

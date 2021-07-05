@@ -21,6 +21,7 @@ pub enum RuntimeErrorType {
    IndexError,
    InstanceError,
    Internal,
+   KeyError,
    RecursionError,
    ReferenceError,
    StopIteration,
@@ -44,6 +45,7 @@ pub enum ObjectOprErrType {
    TypeError(String),
    IndexError(String),
    ZeroDivisionError(String),
+   KeyError(String),
 }
 
 impl ObjectOprErrType {
@@ -61,6 +63,10 @@ impl ObjectOprErrType {
          ObjectOprErrType::ZeroDivisionError(msg) => RuntimeResult::Error {
             error: RuntimeErrorType::ZeroDivision,
             message: msg.to_owned(),
+         },
+         ObjectOprErrType::KeyError(msg) => RuntimeResult::Error {
+            error: RuntimeErrorType::KeyError,
+            message: msg.to_string(),
          },
       }
    }
@@ -165,6 +171,7 @@ pub fn report_runtime_error(vm: &VirtualMachine, error: RuntimeErrorType, messag
       RuntimeErrorType::IndexError => "IndexError",
       RuntimeErrorType::InstanceError => "InstanceError",
       RuntimeErrorType::Internal => "InternalError",
+      RuntimeErrorType::KeyError => "KeyError",
       RuntimeErrorType::RecursionError => "RecursionError",
       RuntimeErrorType::ReferenceError => "ReferenceError",
       RuntimeErrorType::StopIteration => "EndOfIterationError",

@@ -92,7 +92,7 @@ impl Parser {
       self.consume(&R_CURLY, "Expected a matching '}' for the block statement.");
 
       Some(BlockStmt(BlockNode {
-         body,
+         body: body.into_boxed_slice(),
          end_of_block: self.previous.clone(),
       }))
    }
@@ -138,7 +138,7 @@ impl Parser {
       }
 
       Some(VariableDeclNode {
-         identifiers: declarations,
+         identifiers: declarations.into_boxed_slice(),
          value: Box::new(initializer),
       })
    }
@@ -280,7 +280,7 @@ impl Parser {
          None => return None, // Could not parse an iterator expression
       };
 
-      let body: Vec<ASTNode>;
+      let body: Box<[ASTNode]>;
       if has_parenthesis {
          self.consume(
             &R_PARENTHESIS,
@@ -290,7 +290,7 @@ impl Parser {
          body = match self.parse_statement() {
             Some(val) => match val {
                ASTNode::BlockStmt(block) => block.body,
-               _ => vec![val],
+               _ => vec![val].into_boxed_slice(),
             },
             None => return None, // Could not create then branch
          };
@@ -366,7 +366,7 @@ impl Parser {
 
       return Some(FunctionDeclNode {
          name,
-         params,
+         params: params.into_boxed_slice(),
          arity: (min_arity, max_arity),
          body: match self.parse_block() {
             Some(node) => match node {
@@ -472,6 +472,9 @@ impl Parser {
          members.push(ClassMemberDeclNode { member_type });
       }
 
-      Some(ClassDecl(ClassDeclNode { name, members }))
+      Some(ClassDecl(ClassDeclNode {
+         name,
+         members: members.into_boxed_slice(),
+      }))
    }
 }

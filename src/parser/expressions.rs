@@ -66,7 +66,7 @@ impl<'a> Parser {
             BIT_XOR_EQ => ReassignmentType::Xor,
             BIT_OR_EQ => ReassignmentType::BitOr,
             // Regular re-assignment
-            _ => ReassignmentType::None,
+            _ => ReassignmentType::Assign,
          };
 
          // Gets the value for assignment
@@ -91,6 +91,15 @@ impl<'a> Parser {
                   target: getter.target,
                   setter: getter.getter,
                   value: Box::new(rhs),
+                  opr_type,
+               })),
+
+               // Subscript assignment `a[expression] = value`
+               Subscript(sub) => Some(SubscriptAssignment(SubscriptAssignExprNode {
+                  target: sub.target,
+                  index: sub.index,
+                  value: Box::new(rhs),
+                  pos: (opr.line_num, opr.column_start),
                   opr_type,
                })),
 
@@ -585,7 +594,7 @@ impl<'a> Parser {
             // If the parenthesis are empty, then we parse this as an empty tuple.
             return if self.matches(&R_PARENTHESIS) {
                Some(Tuple(TupleExprNode {
-                  values: vec![],
+                  values: vec![].into_boxed_slice(),
                   token: start_token,
                }))
             } else {
@@ -753,7 +762,7 @@ impl<'a> Parser {
       }
 
       Some(Array(ArrayExprNode {
-         values,
+         values: values.into_boxed_slice(),
          token: start_token,
       }))
    }
@@ -785,7 +794,7 @@ impl<'a> Parser {
       }
 
       Some(Tuple(TupleExprNode {
-         values,
+         values: values.into_boxed_slice(),
          token: start_token,
       }))
    }
@@ -840,7 +849,11 @@ impl<'a> Parser {
          }
       }
 
-      Some(Dictionary(DictionaryExprNode { keys, values, token }))
+      Some(Dictionary(DictionaryExprNode {
+         keys: keys.into_boxed_slice(),
+         values: values.into_boxed_slice(),
+         token,
+      }))
    }
 
    /// Parses an array indexing expression.
@@ -852,7 +865,7 @@ impl<'a> Parser {
 
       let pos = (self.previous.line_num, self.previous.column_start);
 
-      let expr = Some(ArrayIndexing(ArrayIndexingExprNode {
+      let expr = Some(Subscript(SubscriptExprNode {
          target: Box::new(expr),
          index: match self.parse_expression() {
             Some(e) => Box::new(e),
@@ -905,7 +918,7 @@ impl<'a> Parser {
 
       Some(FunctionCall(FunctionCallExprNode {
          target: Box::new(name),
-         args,
+         args: args.into_boxed_slice(),
          pos,
       }))
    }

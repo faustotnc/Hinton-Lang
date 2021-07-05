@@ -6,7 +6,7 @@ use std::fmt;
 use std::rc::Rc;
 
 // Submodules
-mod indexing;
+pub mod indexing;
 mod native_operations;
 
 /// Represents a Hinton range object.
@@ -126,7 +126,7 @@ pub enum Object {
    Null,
    Range(RangeObject),
    String(String),
-   Tuple(Vec<Object>),
+   Tuple(Box<[Object]>),
 }
 
 /// Checks that two vectors of objects are equal in value.

@@ -232,7 +232,7 @@ impl Compiler {
          ReassignmentType::BitAnd => self.emit_op_code(OpCode::BitwiseAnd, line_info),
          ReassignmentType::Xor => self.emit_op_code(OpCode::BitwiseXor, line_info),
          ReassignmentType::BitOr => self.emit_op_code(OpCode::BitwiseOr, line_info),
-         ReassignmentType::None => {}
+         ReassignmentType::Assign => {}
       };
    }
 
@@ -250,7 +250,7 @@ impl Compiler {
          Err(()) => return,
       };
 
-      if let ReassignmentType::None = expr.opr_type {
+      if let ReassignmentType::Assign = expr.opr_type {
          // Proceed to directly reassign the variable.
          self.compile_node(&expr.value);
       } else {
@@ -277,7 +277,7 @@ impl Compiler {
       let prop_line_info = (expr.setter.line_num, expr.setter.column_start);
 
       if let Some(pos) = self.add_literal_to_pool(prop_name, &expr.setter, false) {
-         if let ReassignmentType::None = expr.opr_type {
+         if let ReassignmentType::Assign = expr.opr_type {
             // Proceed to directly reassign the variable.
             self.compile_node(&expr.value);
          } else {
@@ -301,6 +301,32 @@ impl Compiler {
             self.emit_op_code_with_short(OpCode::SetPropLong, pos, prop_line_info);
          }
       }
+   }
+
+   /// Compiles a subscripted assignment expression.
+   pub(super) fn compile_subscript_assignment(&mut self, expr: &SubscriptAssignExprNode) {
+      if let ReassignmentType::Assign = expr.opr_type {
+         // Proceed to directly reassign the variable.
+         self.compile_node(&expr.value);
+      } else {
+         // The expression `a[1] /= 2` expands to `a[1] = a[1] / 2`, so we
+         // must get the array's value at the index onto the stack first.
+         self.compile_subscript_expr(&SubscriptExprNode {
+            target: expr.target.clone(),
+            index: expr.index.clone(),
+            pos: expr.pos,
+         });
+
+         // Then we push the other operand's value onto the stack
+         self.compile_node(&expr.value);
+
+         // Then compute the operation of the two operands.
+         self.emit_compound_reassignment_opr(&expr.opr_type, expr.pos);
+      }
+
+      self.compile_node(&expr.index);
+      self.compile_node(&expr.target);
+      self.emit_op_code(OpCode::SubscriptAssign, expr.pos);
    }
 
    /// Compiles an object property access expression.
@@ -421,11 +447,11 @@ impl Compiler {
       }
    }
 
-   /// Compiles an array indexing expression.
-   pub(super) fn compile_array_indexing_expr(&mut self, expr: &ArrayIndexingExprNode) {
+   /// Compiles a subscripting expression.
+   pub(super) fn compile_subscript_expr(&mut self, expr: &SubscriptExprNode) {
       self.compile_node(&expr.target);
       self.compile_node(&expr.index);
-      self.emit_op_code(OpCode::Indexing, expr.pos);
+      self.emit_op_code(OpCode::Subscript, expr.pos);
    }
 
    /// Compiles a function call or new instance expression.

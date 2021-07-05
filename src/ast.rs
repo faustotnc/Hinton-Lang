@@ -7,7 +7,6 @@ pub enum ASTNode {
 
    // Expressions
    Array(ArrayExprNode),
-   ArrayIndexing(ArrayIndexingExprNode),
    Binary(BinaryExprNode),
    Dictionary(DictionaryExprNode),
    FunctionCall(FunctionCallExprNode),
@@ -17,6 +16,8 @@ pub enum ASTNode {
    ObjectGetter(ObjectGetExprNode),
    ObjectSetter(ObjectSetExprNode),
    SelfExpr(SelfExprNode),
+   Subscript(SubscriptExprNode),
+   SubscriptAssignment(SubscriptAssignExprNode),
    TernaryConditional(TernaryConditionalNode),
    Tuple(TupleExprNode),
    Unary(UnaryExprNode),
@@ -59,7 +60,7 @@ impl ASTNode {
 
 #[derive(Clone)]
 pub struct ModuleNode {
-   pub body: Vec<ASTNode>,
+   pub body: Box<[ASTNode]>,
 }
 
 #[derive(Clone)]
@@ -70,20 +71,20 @@ pub struct LiteralExprNode {
 
 #[derive(Clone)]
 pub struct ArrayExprNode {
-   pub values: Vec<ASTNode>,
+   pub values: Box<[ASTNode]>,
    pub token: Token,
 }
 
 #[derive(Clone)]
 pub struct TupleExprNode {
-   pub values: Vec<ASTNode>,
+   pub values: Box<[ASTNode]>,
    pub token: Token,
 }
 
 #[derive(Clone)]
 pub struct DictionaryExprNode {
-   pub keys: Vec<Token>,
-   pub values: Vec<ASTNode>,
+   pub keys: Box<[Token]>,
+   pub values: Box<[ASTNode]>,
    pub token: Token,
 }
 
@@ -156,7 +157,7 @@ pub struct ExpressionStmtNode {
 
 #[derive(Clone)]
 pub struct VariableDeclNode {
-   pub identifiers: Vec<Token>,
+   pub identifiers: Box<[Token]>,
    pub value: Box<ASTNode>,
 }
 
@@ -173,7 +174,7 @@ pub enum ReassignmentType {
    BitAnd, // a &= b
    Xor,    // a ^= b
    BitOr,  // a |= b
-   None,   // a = b
+   Assign, // a = b
 }
 
 #[derive(Clone)]
@@ -185,7 +186,7 @@ pub struct VarReassignmentExprNode {
 }
 
 #[derive(Clone)]
-pub struct ArrayIndexingExprNode {
+pub struct SubscriptExprNode {
    pub target: Box<ASTNode>,
    pub index: Box<ASTNode>,
    pub pos: (usize, usize),
@@ -199,7 +200,7 @@ pub struct ConstantDeclNode {
 
 #[derive(Clone)]
 pub struct BlockNode {
-   pub body: Vec<ASTNode>,
+   pub body: Box<[ASTNode]>,
    pub end_of_block: Token,
 }
 
@@ -224,7 +225,7 @@ pub struct ForStmtNode {
    pub token: Token,
    pub id: IdentifierExprNode,
    pub iterator: Box<ASTNode>,
-   pub body: Vec<ASTNode>,
+   pub body: Box<[ASTNode]>,
 }
 
 #[derive(Clone)]
@@ -236,9 +237,9 @@ pub struct LoopBranchStmtNode {
 #[derive(Clone)]
 pub struct FunctionDeclNode {
    pub name: Token,
-   pub params: Vec<Parameter>,
+   pub params: Box<[Parameter]>,
    pub arity: (u8, u8),
-   pub body: Vec<ASTNode>,
+   pub body: Box<[ASTNode]>,
 }
 
 #[derive(Clone)]
@@ -251,7 +252,7 @@ pub struct Parameter {
 #[derive(Clone)]
 pub struct FunctionCallExprNode {
    pub target: Box<ASTNode>,
-   pub args: Vec<Argument>,
+   pub args: Box<[Argument]>,
    pub pos: (usize, usize),
 }
 
@@ -271,7 +272,7 @@ pub struct ReturnStmtNode {
 #[derive(Clone)]
 pub struct ClassDeclNode {
    pub name: Token,
-   pub members: Vec<ClassMemberDeclNode>,
+   pub members: Box<[ClassMemberDeclNode]>,
 }
 
 #[derive(Clone)]
@@ -302,5 +303,14 @@ pub struct ObjectSetExprNode {
    pub target: Box<ASTNode>,
    pub setter: Token,
    pub value: Box<ASTNode>,
+   pub opr_type: ReassignmentType,
+}
+
+#[derive(Clone)]
+pub struct SubscriptAssignExprNode {
+   pub target: Box<ASTNode>,
+   pub index: Box<ASTNode>,
+   pub value: Box<ASTNode>,
+   pub pos: (usize, usize),
    pub opr_type: ReassignmentType,
 }

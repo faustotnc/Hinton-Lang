@@ -1,14 +1,18 @@
 use crate::errors::ObjectOprErrType;
 use crate::objects::{Object, RangeObject};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 impl Object {
    /// Defines the indexing operation of Hinton objects.
    pub fn subscript(&self, index: &Object) -> Result<Object, ObjectOprErrType> {
       match self {
-         Object::Array(arr) => index_array(&arr.borrow(), index),
-         Object::Tuple(tup) => index_tuple(&tup, index),
-         Object::String(str) => index_string(&str, index),
-         Object::Range(range) => index_range(range, index),
+         Object::Array(arr) => subscript_array(&arr.borrow(), index),
+         Object::Tuple(tup) => subscript_tuple(&tup, index),
+         Object::String(str) => subscript_string(&str, index),
+         Object::Range(range) => subscript_range(range, index),
+         Object::Dict(dict) => subscript_dictionary(dict, index),
          _ => {
             return Err(ObjectOprErrType::TypeError(format!(
                "Cannot index object of type '{}'.",
@@ -29,11 +33,11 @@ impl Object {
 /// # Returns
 /// - `Option<usize>`: Return Some(usize) if the index is within the bounds of the object's length
 /// or `None` otherwise.
-fn to_bounded_index(x: &i64, len: usize) -> Option<usize> {
-   if x >= &0 && (*x as usize) < len {
-      Some(*x as usize)
-   } else if x < &0 && (i64::abs(*x) as usize <= len) {
-      Some(len - i64::abs(*x) as usize)
+pub fn to_bounded_index(x: i64, len: usize) -> Option<usize> {
+   if x >= 0 && (x as usize) < len {
+      Some(x as usize)
+   } else if x < 0 && (i64::abs(x) as usize <= len) {
+      Some(len - i64::abs(x) as usize)
    } else {
       None
    }
@@ -49,11 +53,11 @@ fn to_bounded_index(x: &i64, len: usize) -> Option<usize> {
 /// # Returns
 /// - `Result<Object, ObjectOprErrType>`: Returns `Ok(Object)` with a Hinton Object if the index is
 /// within bounds. Returns `Err(ObjectOprErrType)` if there was an error while indexing the array.
-fn index_array(arr: &[Object], index: &Object) -> Result<Object, ObjectOprErrType> {
+fn subscript_array(arr: &[Object], index: &Object) -> Result<Object, ObjectOprErrType> {
    match index {
       // Indexing type: Array[Int]
       Object::Int(idx) => {
-         if let Some(pos) = to_bounded_index(idx, arr.len()) {
+         if let Some(pos) = to_bounded_index(*idx, arr.len()) {
             if let Some(val) = arr.get(pos) {
                return Ok(val.clone());
             }
@@ -92,11 +96,11 @@ fn index_array(arr: &[Object], index: &Object) -> Result<Object, ObjectOprErrTyp
 /// # Returns
 /// - `Result<Object, ObjectOprErrType>`: Returns `Ok(Object)` with a Hinton Object if the index is
 /// within bounds. Returns `Err(ObjectOprErrType)` if there was an error while indexing the tuple.
-fn index_tuple(tup: &[Object], index: &Object) -> Result<Object, ObjectOprErrType> {
+fn subscript_tuple(tup: &[Object], index: &Object) -> Result<Object, ObjectOprErrType> {
    match index {
       // Indexing type: Tuple[Int]
       Object::Int(idx) => {
-         if let Some(pos) = to_bounded_index(idx, tup.len()) {
+         if let Some(pos) = to_bounded_index(*idx, tup.len()) {
             if let Some(val) = tup.get(pos) {
                return Ok(val.clone());
             }
@@ -137,13 +141,13 @@ fn index_tuple(tup: &[Object], index: &Object) -> Result<Object, ObjectOprErrTyp
 /// # Returns
 /// - `Result<Object, ObjectOprErrType>`: Returns `Ok(Object)` with a Hinton Object if the index is
 /// within bounds. Returns `Err(ObjectOprErrType)` if there was an error while indexing the string.
-fn index_string(str: &str, index: &Object) -> Result<Object, ObjectOprErrType> {
+fn subscript_string(str: &str, index: &Object) -> Result<Object, ObjectOprErrType> {
    match index {
       // Indexing type: String[Int]
       Object::Int(idx) => {
          let chars: Vec<char> = str.chars().collect();
 
-         if let Some(pos) = to_bounded_index(idx, chars.len()) {
+         if let Some(pos) = to_bounded_index(*idx, chars.len()) {
             if let Some(val) = chars.get(pos) {
                return Ok(Object::String(val.to_string()));
             }
@@ -185,14 +189,14 @@ fn index_string(str: &str, index: &Object) -> Result<Object, ObjectOprErrType> {
 /// # Returns
 /// - `Result<Object, ObjectOprErrType>`: Returns `Ok(Object)` with a Hinton Object if the index is
 /// within bounds. Returns `Err(ObjectOprErrType)` if there was an error while indexing the range.
-fn index_range(range: &RangeObject, index: &Object) -> Result<Object, ObjectOprErrType> {
+fn subscript_range(range: &RangeObject, index: &Object) -> Result<Object, ObjectOprErrType> {
    match index {
       // Indexing type: Range[Int]
       Object::Int(idx) => {
          let min = range.min;
          let max = range.max;
 
-         if let Some(pos) = to_bounded_index(idx, i64::abs(max - min) as usize) {
+         if let Some(pos) = to_bounded_index(*idx, i64::abs(max - min) as usize) {
             return if max - min > 0 {
                Ok(Object::Int(min + pos as i64))
             } else {
@@ -206,7 +210,7 @@ fn index_range(range: &RangeObject, index: &Object) -> Result<Object, ObjectOprE
          let min = range.min;
          let max = range.max;
 
-         if let Some(pos) = to_bounded_index(&idx, i64::abs(max - min) as usize) {
+         if let Some(pos) = to_bounded_index(idx, i64::abs(max - min) as usize) {
             return if max - min > 0 {
                Ok(Object::Int(min + pos as i64))
             } else {
@@ -229,4 +233,37 @@ fn index_range(range: &RangeObject, index: &Object) -> Result<Object, ObjectOprE
    Err(ObjectOprErrType::IndexError(String::from(
       "Range index out of bounds.",
    )))
+}
+
+/// Gets the value associated with a key in a Hinton dictionary.
+///
+/// # Parameters
+/// - `dict`: A reference to the underlying `HashMap` in a Hinton dictionary.
+/// - `index`: A Hinton object that will serve as the index of the dictionary. For example, this
+/// object could be a Hinton string, or a Hinton range.
+///
+/// # Returns
+/// - `Result<Object, ObjectOprErrType>`: Returns `Ok(Object)` with a Hinton Object if the key
+/// exists in the dictionary. Returns `Err(ObjectOprErrType)` otherwise.
+fn subscript_dictionary(
+   dict: &Rc<RefCell<HashMap<String, Object>>>,
+   index: &Object,
+) -> Result<Object, ObjectOprErrType> {
+   return match index {
+      Object::String(key) => match dict.borrow().get(key) {
+         Some(o) => Ok(o.clone()),
+         None => Err(ObjectOprErrType::KeyError(format!(
+            "Entry with key '{}' not found in the dictionary.",
+            key
+         ))),
+      },
+      // Indexing type: Range[Range]
+      Object::Range(_) => {
+         unimplemented!("Range indexing with ranges.")
+      }
+      _ => Err(ObjectOprErrType::TypeError(format!(
+         "Dictionaries can only be indexed by a String or Range. Found '{}' instead.",
+         index.type_name()
+      ))),
+   };
 }

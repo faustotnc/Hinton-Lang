@@ -186,7 +186,6 @@ impl Compiler {
    fn compile_node(&mut self, node: &ASTNode) {
       match node {
          ASTNode::Array(x) => self.compile_array_expr(x),
-         ASTNode::ArrayIndexing(x) => self.compile_array_indexing_expr(x),
          ASTNode::Binary(x) => self.compile_binary_expr(x),
          ASTNode::BlockStmt(x) => self.compile_block_stmt(x),
          ASTNode::ClassDecl(x) => self.compile_class_declaration(x),
@@ -205,13 +204,15 @@ impl Compiler {
          ASTNode::ObjectGetter(x) => self.compile_object_getter_expr(x),
          ASTNode::ObjectSetter(x) => self.compile_object_setter_expr(x),
          ASTNode::ReturnStmt(x) => self.compile_return_stmt(x),
+         ASTNode::SelfExpr(x) => self.compile_self_expr(x),
+         ASTNode::Subscript(x) => self.compile_subscript_expr(x),
+         ASTNode::SubscriptAssignment(x) => self.compile_subscript_assignment(x),
          ASTNode::TernaryConditional(x) => self.compile_ternary_conditional_expr(x),
          ASTNode::Tuple(x) => self.compile_tuple_expr(x),
          ASTNode::Unary(x) => self.compile_unary_expr(x),
          ASTNode::VarReassignment(x) => self.compile_var_reassignment_expr(x),
          ASTNode::VariableDecl(x) => self.compile_variable_decl(x),
          ASTNode::WhileStmt(x) => self.compile_while_stmt(x),
-         ASTNode::SelfExpr(x) => self.compile_self_expr(x),
       }
    }
 

@@ -188,7 +188,7 @@ impl Compiler {
    fn bind_default_params(&mut self, decl: &FunctionDeclNode) {
       // Compiles the named parameters so that they can be on top
       // of the stack when the function gets composed at runtime.
-      for param in &decl.params {
+      for param in decl.params.iter() {
          match &param.default {
             Some(expr) => {
                self.compile_node(&expr);

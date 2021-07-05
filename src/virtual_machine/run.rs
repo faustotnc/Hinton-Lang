@@ -2,6 +2,7 @@ use crate::ast::{BinaryExprType, UnaryExprType};
 use crate::bytecode::OpCode;
 use crate::errors::RuntimeErrorType;
 use crate::natives::{get_next_in_iter, make_iter};
+use crate::objects::indexing::to_bounded_index;
 use crate::objects::{
    BoundMethod, ClassFieldObject, ClassObject, ClosureObject, Object, RangeObject, UpValRef,
 };
@@ -65,7 +66,6 @@ impl VirtualMachine {
             OpCode::Expo => self.binary_operation(BinaryExprType::Expo),
             OpCode::GreaterThan => self.binary_operation(BinaryExprType::LogicGreaterThan),
             OpCode::GreaterThanEq => self.binary_operation(BinaryExprType::LogicGreaterThanEQ),
-            OpCode::Indexing => self.op_indexing(),
             OpCode::LessThan => self.binary_operation(BinaryExprType::LogicLessThan),
             OpCode::LessThanEq => self.binary_operation(BinaryExprType::LogicLessThanEQ),
             OpCode::LogicNot => self.unary_operation(UnaryExprType::LogicNeg),
@@ -74,6 +74,7 @@ impl VirtualMachine {
             OpCode::Negate => self.unary_operation(UnaryExprType::ArithmeticNeg),
             OpCode::NotEq => self.binary_operation(BinaryExprType::LogicNotEQ),
             OpCode::NullishCoalescing => self.binary_operation(BinaryExprType::Nullish),
+            OpCode::Subscript => self.op_subscript(),
             OpCode::Subtract => self.binary_operation(BinaryExprType::Minus),
 
             // Jumps
@@ -100,9 +101,10 @@ impl VirtualMachine {
             OpCode::MakeClass | OpCode::MakeClassLong => self.op_make_class(),
             OpCode::MakeInstance => self.op_make_instance(),
 
-            // Property manipulators
+            // Collection manipulators
             OpCode::GetProp | OpCode::GetPropLong => self.op_get_property(),
             OpCode::SetProp | OpCode::SetPropLong => self.op_set_property(),
+            OpCode::SubscriptAssign => self.op_subscript_assign(),
 
             // VM-Specific
             OpCode::EndVirtualMachine => self.op_end_virtual_machine(),
@@ -214,7 +216,7 @@ impl VirtualMachine {
 
       let function = match self.read_constant(pos) {
          Object::Function(obj) => obj,
-         _ => unreachable!("Expected a function object for closure."),
+         _ => unreachable!("Expected a Function object for closure."),
       };
 
       let up_val_count = function.borrow().up_val_count;
@@ -246,7 +248,7 @@ impl VirtualMachine {
 
       let function = match self.read_constant(pos) {
          Object::Function(obj) => obj,
-         _ => unreachable!("Expected a function object for closure."),
+         _ => unreachable!("Expected a Function object for closure."),
       };
 
       let up_val_count = function.borrow().up_val_count;
@@ -343,7 +345,7 @@ impl VirtualMachine {
          Object::Closure(m) => {
             m.function.borrow_mut().defaults = defaults;
          }
-         _ => unreachable!("Expected a function object on TOS."),
+         _ => unreachable!("Expected a Function object on TOS."),
       }
 
       RuntimeResult::Continue
@@ -370,7 +372,7 @@ impl VirtualMachine {
 
       let name = match self.read_constant(pos) {
          Object::String(s) => s,
-         _ => unreachable!("Expected string for class name."),
+         _ => unreachable!("Expected String for class name."),
       };
 
       let new_class = Object::Class(Rc::new(RefCell::new(ClassObject {
@@ -394,7 +396,7 @@ impl VirtualMachine {
 
       let prop_name = match self.read_constant(pos) {
          Object::String(name) => name,
-         _ => unreachable!("Expected string for 'GetProp' name."),
+         _ => unreachable!("Expected String for property access name."),
       };
 
       match self.pop_stack() {
@@ -426,7 +428,7 @@ impl VirtualMachine {
                self.push_stack(val)
             } else {
                return RuntimeResult::Error {
-                  error: RuntimeErrorType::ReferenceError,
+                  error: RuntimeErrorType::KeyError,
                   message: format!("Entry with key '{}' not found in the dictionary.", prop_name),
                };
             }
@@ -441,7 +443,7 @@ impl VirtualMachine {
 
       let prop_name = match self.read_constant(pos) {
          Object::String(name) => name,
-         _ => unreachable!("Expected string for 'SetProp' name."),
+         _ => unreachable!("Expected String for property assignment name."),
       };
 
       let value = self.pop_stack();
@@ -473,8 +475,67 @@ impl VirtualMachine {
                },
             }
          }
+         Object::Dict(dict) => {
+            dict.borrow_mut().insert(prop_name, value.clone());
+            self.push_stack(value)
+         }
          _ => todo!("Other objects also have properties."),
       };
+   }
+
+   /// Executes the instruction to modify the value of a collection at the provided index.
+   fn op_subscript_assign(&mut self) -> RuntimeResult {
+      let target = self.pop_stack();
+      let index = self.pop_stack();
+      let value = self.pop_stack();
+
+      match target {
+         Object::Array(arr) => {
+            let idx = match index {
+               Object::Int(i) => to_bounded_index(i, arr.borrow().len()),
+               _ => {
+                  return RuntimeResult::Error {
+                     error: RuntimeErrorType::TypeError,
+                     message: format!(
+                        "Array reassignment subscript must be an Int. Found '{}' instead.",
+                        index.type_name()
+                     ),
+                  }
+               }
+            };
+
+            match idx {
+               Some(i) => {
+                  arr.borrow_mut()[i] = value.clone();
+                  self.push_stack(value)
+               }
+               None => RuntimeResult::Error {
+                  error: RuntimeErrorType::TypeError,
+                  message: "Array index out of bounds.".to_string(),
+               },
+            }
+         }
+         Object::Dict(dict) => match index {
+            Object::String(s) => {
+               dict.borrow_mut().insert(s, value.clone());
+               self.push_stack(value)
+            }
+            _ => RuntimeResult::Error {
+               error: RuntimeErrorType::TypeError,
+               message: format!(
+                  "Dictionary reassignment subscript must be a String. Found '{}' instead.",
+                  index.type_name()
+               ),
+            },
+         },
+         _ => RuntimeResult::Error {
+            error: RuntimeErrorType::TypeError,
+            message: format!(
+               "Objects of type '{}' do not support subscripted item reassignment.",
+               target.type_name()
+            ),
+         },
+      }
    }
 
    /// Executes the instruction to create a range object with the two objects on the TOS.
@@ -596,7 +657,7 @@ impl VirtualMachine {
          tuple_values.push(self.pop_stack());
       }
 
-      self.push_stack(Object::Tuple(tuple_values))
+      self.push_stack(Object::Tuple(tuple_values.into_boxed_slice()))
    }
 
    /// Executes the instruction to create a dictionary object with the top `N` key-value
@@ -613,7 +674,7 @@ impl VirtualMachine {
             Object::String(key) => {
                dict.insert(key, value);
             }
-            _ => unreachable!("Expected string for dictionary key."),
+            _ => unreachable!("Expected String for dictionary key."),
          }
       }
 
@@ -621,7 +682,7 @@ impl VirtualMachine {
    }
 
    /// Executes the instruction to subscript and object by some index.
-   fn op_indexing(&mut self) -> RuntimeResult {
+   fn op_subscript(&mut self) -> RuntimeResult {
       let index = self.pop_stack();
       let target = self.pop_stack();
 
@@ -663,7 +724,7 @@ impl VirtualMachine {
          self.globals.insert(name, val);
          RuntimeResult::Continue
       } else {
-         unreachable!("Expected a string for global declaration name.");
+         unreachable!("Expected a String for global declaration name.");
       }
    }
 
@@ -676,7 +737,7 @@ impl VirtualMachine {
          let val = self.globals.get(&name).unwrap().clone();
          self.push_stack(val)
       } else {
-         unreachable!("Expected a string as global declaration name.");
+         unreachable!("Expected a String as name of global variable access.");
       }
    }
 
@@ -690,7 +751,7 @@ impl VirtualMachine {
          self.globals.insert(name, val);
          RuntimeResult::Continue
       } else {
-         unreachable!("Expected a string as global declaration name.");
+         unreachable!("Expected a String as global declaration name.");
       }
    }
 
@@ -726,7 +787,7 @@ impl VirtualMachine {
             up_values: vec![],
          },
          Object::Closure(c) => c,
-         _ => unreachable!("Expected function or closure on TOS for method binding."),
+         _ => unreachable!("Expected Function or Closure on TOS for method binding."),
       };
 
       let method_name = method.function.borrow().name.clone();
@@ -738,7 +799,7 @@ impl VirtualMachine {
                .members
                .insert(method_name, Object::Closure(method));
          }
-         _ => unreachable!("Expected class object on TOS for method binding."),
+         _ => unreachable!("Expected Class object on TOS for method binding."),
       }
 
       RuntimeResult::Continue
@@ -748,7 +809,7 @@ impl VirtualMachine {
    fn append_var_class_field(&mut self) -> RuntimeResult {
       let field_name = match self.pop_stack() {
          Object::String(s) => s,
-         _ => unreachable!("Expected string on TOS for class field."),
+         _ => unreachable!("Expected String on TOS for class field."),
       };
 
       let field_value = self.pop_stack();
@@ -764,7 +825,7 @@ impl VirtualMachine {
                }),
             );
          }
-         _ => unreachable!("Expected class object on TOS for variable field binding."),
+         _ => unreachable!("Expected Class object on TOS for variable field binding."),
       }
 
       RuntimeResult::Continue
@@ -774,7 +835,7 @@ impl VirtualMachine {
    fn append_const_class_field(&mut self) -> RuntimeResult {
       let field_name = match self.pop_stack() {
          Object::String(s) => s,
-         _ => unreachable!("Expected string on TOS for constant class field."),
+         _ => unreachable!("Expected String on TOS for constant class field."),
       };
 
       let field_value = self.pop_stack();
@@ -790,7 +851,7 @@ impl VirtualMachine {
                }),
             );
          }
-         _ => unreachable!("Expected class object on TOS for constant field binding."),
+         _ => unreachable!("Expected Class object on TOS for constant field binding."),
       }
 
       RuntimeResult::Continue

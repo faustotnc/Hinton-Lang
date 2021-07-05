@@ -41,31 +41,33 @@ impl Parser {
             column_start: 0,
             column_end: 0,
             token_type: __INIT_PARSER__,
-            lexeme: String::from(""),
+            lexeme: "".to_string(),
          },
          current: Token {
             line_num: 0,
             column_start: 0,
             column_end: 0,
             token_type: __INIT_PARSER__,
-            lexeme: String::from(""),
+            lexeme: "".to_string(),
          },
          is_in_panic: false,
          errors: vec![],
       };
 
-      let mut program = ModuleNode { body: vec![] };
+      let mut program_body = vec![];
 
       // Start compiling the chunk
       parser.advance();
       while !parser.matches(&EOF) {
          if let Some(val) = parser.parse_declaration() {
-            program.body.push(val)
+            program_body.push(val)
          }
       }
 
       if parser.errors.is_empty() {
-         Ok(ASTNode::Module(program))
+         Ok(ASTNode::Module(ModuleNode {
+            body: program_body.into_boxed_slice(),
+         }))
       } else {
          Err(parser.errors)
       }

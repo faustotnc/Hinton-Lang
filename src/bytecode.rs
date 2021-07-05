@@ -28,7 +28,6 @@ pub enum OpCode {
    Expo,
    GreaterThan,
    GreaterThanEq,
-   Indexing,
    LessThan,
    LessThanEq,
    LoadImm0F,
@@ -49,6 +48,8 @@ pub enum OpCode {
    PopCloseUpVal,
    PopStackTop,
    Return,
+   Subscript,
+   SubscriptAssign,
    Subtract,
 
    // Instructions with one chunk operands.
@@ -337,7 +338,6 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
          OpCode::Expo => "EXPO",
          OpCode::GreaterThan => "GREATER_THAN",
          OpCode::GreaterThanEq => "GREATER_THAN_EQ",
-         OpCode::Indexing => "INDEXING",
          OpCode::LessThan => "LESS_THAN",
          OpCode::LessThanEq => "LESS_THAN_EQ",
          OpCode::LoadImm0F => "LOAD_IMM_0F",
@@ -358,6 +358,8 @@ pub fn disassemble_function_scope(chunk: &Chunk, natives: &Vec<String>, name: &S
          OpCode::PopCloseUpVal => "POP_CLOSE_UP_VAL",
          OpCode::PopStackTop => "POP_STACK_TOP",
          OpCode::Return => "RETURN",
+         OpCode::Subscript => "SUBSCRIPT",
+         OpCode::SubscriptAssign => "SUBSCRIPT_ASSIGN",
          OpCode::Subtract => "SUBTRACT",
 
          // OpCodes with 1 operand
