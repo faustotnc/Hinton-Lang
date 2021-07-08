@@ -1,12 +1,12 @@
-use crate::bytecode::OpCode;
+use crate::built_in::BuiltIn;
 use crate::compiler::Compiler;
+use crate::core::bytecode::OpCode;
 use crate::errors::{report_errors_list, report_runtime_error, RuntimeErrorType};
-use crate::natives::Natives;
 use crate::objects::{ClosureObject, FuncObject, InstanceObject, Object, UpValRef};
 use crate::parser::Parser;
 use crate::FRAMES_MAX;
+use hashbrown::HashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -30,19 +30,19 @@ impl CallFrame {
    }
 
    /// Gets the current instruction and advances the instruction pointer to the next instruction.
-   fn get_next_op_code(&mut self) -> OpCode {
+   fn next_op_code(&mut self) -> OpCode {
       self.ip += 1;
       self.closure.function.borrow().chunk.get_op_code(self.ip - 1)
    }
 
    /// Gets the current raw byte and advances the instruction pointer to the next instruction.
-   fn get_next_byte(&mut self) -> u8 {
+   fn next_byte(&mut self) -> u8 {
       self.ip += 1;
       self.closure.function.borrow().chunk.get_byte(self.ip - 1)
    }
 
    /// Gets the current two raw bytes and advances the instruction pointer by 2 instructions.
-   fn get_next_short(&mut self) -> u16 {
+   fn next_short(&mut self) -> u16 {
       self.ip += 2;
       self.closure.function.borrow().chunk.get_short(self.ip - 2)
    }
@@ -54,7 +54,7 @@ impl CallFrame {
 }
 
 /// Represents a virtual machine.
-pub struct VirtualMachine {
+pub struct VM {
    /// The path to the source file.
    filepath: PathBuf,
    /// A list of call frames (the VM's call frames stack).
@@ -66,8 +66,8 @@ pub struct VirtualMachine {
    /// A collection of UpValues in the program.
    /// TODO: Find a better way to manage UpValues.
    up_values: Vec<Rc<RefCell<UpValRef>>>,
-   /// The native functions available in a Hinton program.
-   natives: Natives,
+   /// The built-in functions and primitives of Hinton
+   pub(crate) built_in: BuiltIn,
 }
 
 /// The types of results the interpreter can return.
@@ -88,20 +88,20 @@ pub enum RuntimeResult {
    Continue,
 }
 
-impl VirtualMachine {
+impl VM {
    /// Interprets the source text of a file.
    ///
    /// # Returns
    /// - `InterpretResult`: The result of the source interpretation.
    pub fn interpret(filepath: PathBuf, source: &str) -> InterpretResult {
       // Creates a new virtual machine
-      let mut _self = VirtualMachine {
+      let mut _self = VM {
          stack: Vec::with_capacity(256),
          frames: Vec::with_capacity(256),
          filepath,
          globals: Default::default(),
          up_values: vec![],
-         natives: Natives::default(),
+         built_in: BuiltIn::default(),
       };
 
       // Parses the program into an AST and aborts if there are any parsing errors.
@@ -114,7 +114,7 @@ impl VirtualMachine {
       };
 
       // Compiles the program into bytecode and aborts if there are any compiling errors.
-      let module = match Compiler::compile_ast(&_self.filepath, &ast, _self.natives.get_names()) {
+      let module = match Compiler::compile_ast(&_self.filepath, &ast, &_self.built_in) {
          Ok(x) => x,
          Err(e) => {
             report_errors_list(&_self.filepath, e, source);
@@ -162,22 +162,22 @@ impl VirtualMachine {
    }
 
    /// Gets the next OpCode in the chunk.
-   fn get_next_op_code(&mut self) -> OpCode {
-      self.current_frame_mut().get_next_op_code()
+   fn next_op_code(&mut self) -> OpCode {
+      self.current_frame_mut().next_op_code()
    }
 
    /// Gets the next raw byte in the chunk.
-   fn get_next_byte(&mut self) -> u8 {
-      self.current_frame_mut().get_next_byte()
+   fn next_byte(&mut self) -> u8 {
+      self.current_frame_mut().next_byte()
    }
 
    /// Gets the next raw two bytes in the chunk.
-   fn get_next_short(&mut self) -> u16 {
-      self.current_frame_mut().get_next_short()
+   fn next_short(&mut self) -> u16 {
+      self.current_frame_mut().next_short()
    }
 
    /// Pops the last object in the objects stack.
-   fn pop_stack(&mut self) -> Object {
+   pub(crate) fn pop_stack(&mut self) -> Object {
       match self.stack.pop() {
          Some(obj) => obj,
          None => {
@@ -187,17 +187,17 @@ impl VirtualMachine {
    }
 
    /// Pushes an object onto the back of the objects stack.
-   fn push_stack(&mut self, new_val: Object) -> RuntimeResult {
+   pub(crate) fn push_stack(&mut self, new_val: Object) -> RuntimeResult {
       self.stack.push(new_val);
       RuntimeResult::Continue
    }
 
-   /// Gets an immutable reference to the object at the provided stack top offset.
+   /// Gets an immutable reference to the object at the provided stack-top offset.
    fn peek_stack(&self, pos: usize) -> &Object {
       &self.stack[self.stack.len() - 1 - pos]
    }
 
-   /// Gets a mutable reference to the object at the provided stack top offset.
+   /// Gets a mutable reference to the object at the provided stack-top offset.
    fn peek_stack_mut(&mut self, pos: usize) -> &mut Object {
       let stack_size = self.stack.len();
       &mut self.stack[stack_size - 1 - pos]
@@ -225,10 +225,10 @@ impl VirtualMachine {
    fn get_std_or_long_operand(&mut self, op: OpCode) -> usize {
       // The compiler makes sure that the structure of the bytecode is correct
       // for the VM to execute, so unwrapping without check should be fine.
-      if op == self.current_frame_mut().peek_current_op_code() {
-         self.get_next_byte() as usize
+      if op == self.current_frame().peek_current_op_code() {
+         self.next_byte() as usize
       } else {
-         self.get_next_short() as usize
+         self.next_short() as usize
       }
    }
 
@@ -250,16 +250,25 @@ impl VirtualMachine {
             }
             args.reverse();
 
-            match self.natives.call_native(&obj.name, args) {
-               Ok(x) => {
-                  // Pop the native function call off the stack
-                  self.pop_stack();
-                  // Place the result of the call on top of the stack
-                  self.push_stack(x);
-                  RuntimeResult::Continue
-               }
-               Err(e) => e,
+            // Pop native function object off the stack before calling it.
+            self.pop_stack();
+
+            // Execute the native function
+            BuiltIn::call_native_fn(self, *obj, args)
+         }
+         Object::BoundNativeMethod(obj) => {
+            let mut args: Vec<Object> = vec![];
+            for _ in 0..arg_count {
+               let val = self.pop_stack();
+               args.push(val);
             }
+            args.reverse();
+
+            // Pop native function object off the stack before calling it.
+            self.pop_stack();
+
+            // Execute the native function
+            BuiltIn::call_bound_method(self, obj, args)
          }
          _ => RuntimeResult::Error {
             error: RuntimeErrorType::TypeError,
@@ -313,24 +322,8 @@ impl VirtualMachine {
       let max_arity = function.max_arity;
       let min_arity = function.min_arity;
 
-      // Check that the correct number of arguments is passed to the function
-      if arg_count < min_arity || arg_count > max_arity {
-         let msg;
-
-         if min_arity == max_arity {
-            msg = format!("Expected {} arguments but got {} instead.", min_arity, arg_count);
-         } else {
-            msg = format!(
-               "Expected {} to {} arguments but got {} instead.",
-               min_arity, max_arity, arg_count
-            );
-         };
-
-         return Err(RuntimeResult::Error {
-            error: RuntimeErrorType::ArgumentError,
-            message: msg,
-         });
-      }
+      // Performs an arity check on the function call.
+      self.arity_check(min_arity, max_arity, arg_count)?;
 
       // Pushes the default values onto the stack
       // if they were not passed into the func call
@@ -349,6 +342,23 @@ impl VirtualMachine {
          return Err(RuntimeResult::Error {
             error: RuntimeErrorType::RecursionError,
             message: String::from("Maximum recursion depth exceeded."),
+         });
+      }
+
+      Ok(())
+   }
+
+   pub fn arity_check(&self, min: u8, max: u8, count: u8) -> Result<(), RuntimeResult> {
+      if count < min || count > max {
+         let msg = if min == max {
+            format!("Expected {} arguments but got {} instead.", min, count)
+         } else {
+            format!("Expected {} to {} arguments but got {} instead.", min, max, count)
+         };
+
+         return Err(RuntimeResult::Error {
+            error: RuntimeErrorType::ArgumentError,
+            message: msg,
          });
       }
 

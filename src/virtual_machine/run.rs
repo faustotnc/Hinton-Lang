@@ -1,21 +1,20 @@
-use crate::ast::{BinaryExprType, UnaryExprType};
-use crate::bytecode::OpCode;
+use crate::built_in::natives::{get_next_in_iter, make_iter};
+use crate::built_in::BuiltIn;
+use crate::core::ast::{BinaryExprType, UnaryExprType};
+use crate::core::bytecode::OpCode;
 use crate::errors::RuntimeErrorType;
-use crate::natives::{get_next_in_iter, make_iter};
 use crate::objects::indexing::to_bounded_index;
-use crate::objects::{
-   BoundMethod, ClassFieldObject, ClassObject, ClosureObject, Object, RangeObject, UpValRef,
-};
-use crate::virtual_machine::{RuntimeResult, VirtualMachine};
+use crate::objects::*;
+use crate::virtual_machine::{RuntimeResult, VM};
+use hashbrown::HashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
-impl VirtualMachine {
+impl VM {
    /// Executes the instructions in a chunk.
    pub(crate) fn run(&mut self) -> RuntimeResult {
       loop {
-         let instruction = self.get_next_op_code();
+         let instruction = self.next_op_code();
 
          let exec = match instruction {
             OpCode::PopStackTop => {
@@ -34,6 +33,7 @@ impl VirtualMachine {
             OpCode::LoadImmNull => self.push_stack(Object::Null),
             OpCode::LoadImmTrue => self.push_stack(Object::Bool(true)),
             OpCode::LoadNative => self.op_load_native(),
+            OpCode::LoadPrimitive => self.op_load_primitive(),
 
             // Object makers
             OpCode::MakeArray | OpCode::MakeArrayLong => self.op_make_array(),
@@ -132,7 +132,7 @@ impl VirtualMachine {
    /// offset if the popped value is falsey.
    fn op_pop_and_jump_if_false(&mut self) -> RuntimeResult {
       // The POP_JUMP_IF_FALSE instruction always has a short as its operand.
-      let offset = self.get_next_short() as usize;
+      let offset = self.next_short() as usize;
 
       if self.pop_stack().is_falsey() {
          self.current_frame_mut().ip += offset;
@@ -145,7 +145,7 @@ impl VirtualMachine {
    /// falsey, or pop the top off the stack otherwise.
    fn op_jump_if_false_or_pop(&mut self) -> RuntimeResult {
       // The JUMP_IF_FALSE_OR_POP instruction always has a short as its operand.
-      let offset = self.get_next_short() as usize;
+      let offset = self.next_short() as usize;
 
       if self.peek_stack(0).is_falsey() {
          self.current_frame_mut().ip += offset;
@@ -160,7 +160,7 @@ impl VirtualMachine {
    /// offset if the popped value is truthy.
    fn op_jump_if_true_or_pop(&mut self) -> RuntimeResult {
       // The JUMP_IF_TRUE_OR_POP instruction always has a short as its operand.
-      let offset = self.get_next_short() as usize;
+      let offset = self.next_short() as usize;
 
       if !self.peek_stack(0).is_falsey() {
          self.current_frame_mut().ip += offset;
@@ -174,7 +174,7 @@ impl VirtualMachine {
    /// Executes the instruction to jump forward by the given offset.
    fn op_jump_forward(&mut self) -> RuntimeResult {
       // The JUMP_FORWARD instruction always has a short as its operand.
-      let offset = self.get_next_short() as usize;
+      let offset = self.next_short() as usize;
       self.current_frame_mut().ip += offset;
       RuntimeResult::Continue
    }
@@ -188,21 +188,33 @@ impl VirtualMachine {
 
    /// Executes the instruction to load a native function onto the stack.
    fn op_load_native(&mut self) -> RuntimeResult {
-      let native = self.get_next_byte() as usize;
+      let native = self.next_byte() as usize;
 
-      match self.natives.get_native_fn_object(native) {
+      match self.built_in.natives.get_native_fn_object(native) {
          Ok(f) => self.push_stack(Object::Native(Box::new(f))),
+         Err(e) => e,
+      }
+   }
+
+   /// Executes the instruction to load a native function onto the stack.
+   fn op_load_primitive(&mut self) -> RuntimeResult {
+      let name_idx = self.next_byte() as usize;
+
+      let name = match self.read_constant(name_idx) {
+         Object::String(s) => s,
+         _ => unreachable!("Expected String for primitive property name."),
+      };
+
+      match self.built_in.primitives.get_class_object(&name) {
+         Ok(f) => self.push_stack(Object::Class(f)),
          Err(e) => e,
       }
    }
 
    /// Executes the instruction to call a function object.
    fn op_func_call(&mut self) -> RuntimeResult {
-      // Functions can only have 255-MAX parameters
-      let arg_count = self.get_next_byte();
-
+      let arg_count = self.next_byte(); // Functions can only have 255-MAX parameters
       let maybe_function = self.peek_stack(arg_count as usize).clone();
-
       self.call_object(maybe_function, arg_count)
    }
 
@@ -223,8 +235,8 @@ impl VirtualMachine {
       let mut up_values: Vec<Rc<RefCell<UpValRef>>> = Vec::with_capacity(up_val_count);
 
       for _ in 0..up_val_count {
-         let is_local = self.get_next_byte() == 1u8;
-         let index = self.get_next_byte() as usize;
+         let is_local = self.next_byte() == 1u8;
+         let index = self.next_byte() as usize;
 
          let up = if is_local {
             self.create_up_value(self.current_frame().return_index + index)
@@ -255,8 +267,8 @@ impl VirtualMachine {
       let mut up_values: Vec<Rc<RefCell<UpValRef>>> = Vec::with_capacity(up_val_count);
 
       for _ in 0..up_val_count {
-         let is_local = self.get_next_byte() == 1u8;
-         let index = self.get_next_short() as usize;
+         let is_local = self.next_byte() == 1u8;
+         let index = self.next_short() as usize;
 
          let up = if is_local {
             self.create_up_value(self.current_frame().return_index + index)
@@ -329,7 +341,7 @@ impl VirtualMachine {
    /// Executes the instruction to bind `N` number of default parameters to a function.
    fn op_bind_function_defaults(&mut self) -> RuntimeResult {
       // Functions can only have 255-MAX parameters
-      let param_count = self.get_next_byte();
+      let param_count = self.next_byte();
 
       let mut defaults: Vec<Object> = vec![];
       for _ in 0..param_count {
@@ -385,7 +397,7 @@ impl VirtualMachine {
    /// Executes the instruction to create an instance from a class object.
    fn op_make_instance(&mut self) -> RuntimeResult {
       // Instances can only have 255-MAX arguments
-      let arg_count = self.get_next_byte();
+      let arg_count = self.next_byte();
       let maybe_instance = self.peek_stack(arg_count as usize).clone();
       self.create_instance(maybe_instance, arg_count)
    }
@@ -399,40 +411,34 @@ impl VirtualMachine {
          _ => unreachable!("Expected String for property access name."),
       };
 
-      match self.pop_stack() {
-         Object::Instance(x) => {
-            if x.borrow().members.contains_key(&prop_name) {
-               let val = x.borrow().members.get(&prop_name).unwrap().clone();
-
-               match val {
-                  Object::Closure(c) => self.push_stack(Object::BoundMethod(BoundMethod {
-                     receiver: x,
-                     method: c,
-                  })),
-                  _ => self.push_stack(val),
-               }
-            } else {
-               return RuntimeResult::Error {
-                  error: RuntimeErrorType::ReferenceError,
-                  message: format!(
-                     "Property '{}' not defined in object of type '{}'.",
-                     prop_name,
-                     x.borrow().class.borrow().name
-                  ),
-               };
-            }
-         }
-         Object::Dict(x) => {
-            if x.borrow().contains_key(&prop_name) {
-               let val = x.borrow().get(&prop_name).unwrap().clone();
-               self.push_stack(val)
-            } else {
-               return RuntimeResult::Error {
-                  error: RuntimeErrorType::KeyError,
-                  message: format!("Entry with key '{}' not found in the dictionary.", prop_name),
-               };
-            }
-         }
+      let value = self.pop_stack();
+      match value {
+         Object::Instance(x) => match x.borrow().members.get(&prop_name) {
+            Some(o) => match o {
+               Object::Closure(c) => self.push_stack(Object::BoundMethod(BoundMethod {
+                  receiver: x.clone(),
+                  method: c.clone(),
+               })),
+               _ => self.push_stack(o.clone()),
+            },
+            None => RuntimeResult::Error {
+               error: RuntimeErrorType::ReferenceError,
+               message: format!(
+                  "Property '{}' not defined in object of type '{}'.",
+                  prop_name,
+                  x.borrow().class.borrow().name
+               ),
+            },
+         },
+         Object::Dict(x) => match x.borrow().get(&prop_name) {
+            Some(val) => self.push_stack(val.clone()),
+            None => RuntimeResult::Error {
+               error: RuntimeErrorType::KeyError,
+               message: format!("Entry with key '{}' not found in the dictionary.", prop_name),
+            },
+         },
+         Object::Int(_) => BuiltIn::primitive_prop(self, value, "Int", prop_name),
+         Object::String(_) => BuiltIn::primitive_prop(self, value, "String", prop_name),
          _ => todo!("Other objects also have properties."),
       }
    }
@@ -618,7 +624,7 @@ impl VirtualMachine {
    /// forward by the given offset if the iterator is empty. This instruction primarily used
    /// in `for-in` loops.
    fn op_get_iter_next_or_jump(&mut self) -> RuntimeResult {
-      let jump = self.get_next_short() as usize;
+      let jump = self.next_short() as usize;
 
       match self.peek_stack(0) {
          Object::Iter(i) => match get_next_in_iter(i) {

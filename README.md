@@ -135,11 +135,9 @@ Chunk Size: 31
 
 ## Missing Features
 I initially started reading the Crafting Interpreters book with no knowledge of compilers, interpreters, ASTs, or bytecode. I also did not know how to write Rust programs until February of 2021 (and I still have a lot to learn about it). Because of this, translating the code found in the last chapters of the book has been quite difficult. Even with those challenges, I am still trying to add as many smaller features as possible while also trying to improve the three components of the interpreter before moving on. Here is a list of features that Hinton is currently missing and that may take longer to be added:
-* Lambda expressions.
 * Garbage Collection.
 * Inheritance.
 * Importing Modules.
-* Native methods bound to primitive objects (i.e., `Array.len()`).
 
 ## Contributing
 Because I am creating Hinton to learn about compiler/interpreter design and programming language implementation, I will not be accepting any pull requests that add any of the above *missing features* to Hinton (I want to learn how to do it myself). However, any other contributions that improve the current state of the interpreter are welcomed. For a list of planned features or issues to which you can contribute visit the [Planned Features](https://github.com/hinton-lang/Hinton/projects/1) or [Issues](https://github.com/hinton-lang/Hinton/issues) page.

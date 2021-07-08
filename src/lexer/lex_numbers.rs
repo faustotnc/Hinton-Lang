@@ -1,5 +1,5 @@
-use crate::lexer::tokens::Token;
-use crate::lexer::tokens::TokenType::*;
+use crate::core::tokens::Token;
+use crate::core::tokens::TokenType::*;
 use crate::lexer::Lexer;
 
 impl Lexer {

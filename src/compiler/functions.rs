@@ -1,10 +1,10 @@
-use crate::ast::*;
-use crate::bytecode;
-use crate::bytecode::OpCode;
 use crate::compiler::symbols::{Symbol, SymbolTable, SymbolType};
 use crate::compiler::{Compiler, CompilerCtx, FunctionScope, UpValue};
+use crate::core::ast::*;
+use crate::core::bytecode::OpCode;
+use crate::core::chunk::Chunk;
+use crate::core::tokens::Token;
 use crate::errors::CompilerErrorType;
-use crate::lexer::tokens::Token;
 use crate::objects::{FuncObject, Object};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -22,9 +22,13 @@ impl Compiler {
       };
 
       // Declare the function in the function's parent's scope.
-      let parent_symbol_pos = match self.declare_symbol(&decl.name, s_type) {
-         Ok(p) => p,
-         Err(_) => return,
+      let parent_symbol_pos = if !matches!(t, CompilerCtx::Lambda) {
+         match self.declare_symbol(&decl.name, s_type) {
+            Ok(p) => p,
+            Err(_) => return,
+         }
+      } else {
+         usize::MAX
       };
 
       // Change the compiler's context to a function or a method
@@ -59,7 +63,7 @@ impl Compiler {
             defaults: vec![],
             min_arity: decl.arity.0,
             max_arity: decl.arity.1,
-            chunk: bytecode::Chunk::new(),
+            chunk: Chunk::new(),
             name: decl.name.lexeme.clone(),
             up_val_count: 0,
          },
@@ -114,15 +118,16 @@ impl Compiler {
          self.bind_default_params(decl);
       }
 
-      if let CompilerCtx::Class = self.compiler_type {
-         self.emit_op_code(OpCode::AppendMethod, func_pos);
-      }
+      if !matches!(t, CompilerCtx::Lambda) {
+         if let CompilerCtx::Class = self.compiler_type {
+            self.emit_op_code(OpCode::AppendMethod, func_pos);
+         }
 
-      if self.is_global_scope() {
-         self.define_as_global(&decl.name);
+         if self.is_global_scope() {
+            self.define_as_global(&decl.name);
+         }
+         self.current_s_table_mut().mark_initialized(parent_symbol_pos);
       }
-
-      self.current_s_table_mut().mark_initialized(parent_symbol_pos);
    }
 
    /// Emits the appropriate code to either load a function object from the constant or create

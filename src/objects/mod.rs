@@ -1,8 +1,11 @@
-use crate::bytecode::Chunk;
-use crate::natives::NativeFn;
+use crate::built_in::{NativeBoundMethod, NativeFn};
+use crate::core::chunk::Chunk;
+use crate::errors::RuntimeErrorType;
+use crate::virtual_machine::RuntimeResult;
+use hashbrown::HashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt;
+use std::fmt::Formatter;
 use std::rc::Rc;
 
 // Submodules
@@ -20,6 +23,12 @@ pub struct RangeObject {
 pub struct IterObject {
    pub iter: Box<Object>,
    pub index: usize,
+}
+
+impl fmt::Display for IterObject {
+   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+      write!(f, "<Iterable '{}'>", self.iter.type_name())
+   }
 }
 
 /// Represents a Hinton function object.
@@ -46,6 +55,16 @@ impl Default for FuncObject {
    }
 }
 
+impl fmt::Display for FuncObject {
+   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+      if self.name == "fn" {
+         write!(f, "<Func '<lambda>' at {:p}>", &*self as *const _)
+      } else {
+         write!(f, "<Func '{}' at {:p}>", &self.name, &*self as *const _)
+      }
+   }
+}
+
 /// Represents a Hinton native function object.
 #[derive(Clone)]
 pub struct NativeFuncObj {
@@ -55,11 +74,44 @@ pub struct NativeFuncObj {
    pub body: NativeFn,
 }
 
+impl fmt::Display for NativeFuncObj {
+   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+      write!(f, "<Func '{}' at {:p}>", self.name, &self.body as *const _)
+   }
+}
+
+/// Represents a Hinton native function object.
+#[derive(Clone)]
+pub struct NativeMethodObj {
+   pub class_name: String,
+   pub method_name: String,
+   pub value: Box<Object>,
+   pub min_arity: u8,
+   pub max_arity: u8,
+   pub body: NativeBoundMethod,
+}
+
+impl fmt::Display for NativeMethodObj {
+   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+      write!(
+         f,
+         "<Method '{}.{}' at {:p}>",
+         self.class_name, self.method_name, &self.body as *const _
+      )
+   }
+}
+
 /// Represents a Hinton closure object.
 #[derive(Clone)]
 pub struct ClosureObject {
    pub function: Rc<RefCell<FuncObject>>,
    pub up_values: Vec<Rc<RefCell<UpValRef>>>,
+}
+
+impl fmt::Display for ClosureObject {
+   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+      write!(f, "{}", self.function.borrow())
+   }
 }
 
 /// Represents a closure UpValue reference.
@@ -86,6 +138,33 @@ pub struct ClassObject {
    pub members: HashMap<String, Object>,
 }
 
+impl fmt::Display for ClassObject {
+   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+      write!(f, "<Class '{}' at {:p}>", self.name, &*self as *const _)
+   }
+}
+impl ClassObject {
+   pub fn new(name: &str) -> Self {
+      Self {
+         name: name.to_string(),
+         members: HashMap::new(),
+      }
+   }
+
+   pub fn get(&self, name: String) -> Result<Object, RuntimeResult> {
+      match self.members.get(&name) {
+         Some(o) => Ok(o.clone()),
+         None => Err(RuntimeResult::Error {
+            error: RuntimeErrorType::ReferenceError,
+            message: format!(
+               "Property '{}' not defined in object of type '{}'.",
+               name, self.name
+            ),
+         }),
+      }
+   }
+}
+
 /// Represents a Hinton Instance object.
 #[derive(Clone)]
 pub struct InstanceObject {
@@ -93,11 +172,33 @@ pub struct InstanceObject {
    pub members: HashMap<String, Object>,
 }
 
+impl fmt::Display for InstanceObject {
+   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+      write!(
+         f,
+         "<Instance of '{}' at {:p}>",
+         self.class.borrow().name,
+         &*self as *const _
+      )
+   }
+}
+
 /// Represents a Hinton bound method.
 #[derive(Clone)]
 pub struct BoundMethod {
    pub receiver: Rc<RefCell<InstanceObject>>,
    pub method: ClosureObject,
+}
+
+impl fmt::Display for BoundMethod {
+   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+      let receiver = &self.receiver.borrow();
+      let class_name = &receiver.class.borrow().name;
+      let method_name = &self.method.function.borrow().name;
+      let prt_str = &*self.method.function.borrow() as *const _;
+
+      write!(f, "Method '{}.{}' at {:p}", class_name, method_name, prt_str)
+   }
 }
 
 /// Represents a Hinton class field.
@@ -113,6 +214,7 @@ pub enum Object {
    Array(Rc<RefCell<Vec<Object>>>),
    Bool(bool),
    BoundMethod(BoundMethod),
+   BoundNativeMethod(NativeMethodObj),
    Class(Rc<RefCell<ClassObject>>),
    ClassField(ClassFieldObject),
    Closure(ClosureObject),
@@ -127,6 +229,36 @@ pub enum Object {
    Range(RangeObject),
    String(String),
    Tuple(Box<[Object]>),
+}
+
+impl From<NativeFuncObj> for Object {
+   fn from(o: NativeFuncObj) -> Self {
+      Object::Native(Box::new(o))
+   }
+}
+
+impl From<NativeMethodObj> for Object {
+   fn from(o: NativeMethodObj) -> Self {
+      Object::BoundNativeMethod(o)
+   }
+}
+
+impl From<ClassObject> for Object {
+   fn from(o: ClassObject) -> Self {
+      Object::Class(Rc::new(RefCell::new(o)))
+   }
+}
+
+impl From<String> for Object {
+   fn from(o: String) -> Self {
+      Object::String(o)
+   }
+}
+
+impl From<&str> for Object {
+   fn from(o: &str) -> Self {
+      Object::String(o.to_string())
+   }
 }
 
 /// Checks that two vectors of objects are equal in value.
@@ -158,9 +290,11 @@ impl Object {
          Self::Bool(_) => String::from("Bool"),
          Self::Dict(_) => String::from("Dict"),
          Self::Float(_) => String::from("Float"),
-         Self::Function(_) | Self::Native(_) | Self::Closure(_) | Self::BoundMethod(_) => {
-            String::from("Function")
-         }
+         Self::Function(_)
+         | Self::Native(_)
+         | Self::Closure(_)
+         | Self::BoundMethod(_)
+         | Self::BoundNativeMethod(_) => String::from("Function"),
          Self::ClassField(c) => c.value.type_name(),
          Self::Int(_) => String::from("Int"),
          Self::Iter(_) => String::from("Iter"),
@@ -380,27 +514,32 @@ impl Object {
 impl<'a> fmt::Display for Object {
    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
       match *self {
-         Object::Int(ref inner) => {
-            let str =
-               String::from("\x1b[38;5;81m") + inner.to_string().as_str() + String::from("\x1b[0m").as_str();
-            fmt::Display::fmt(&str, f)
-         }
+         Object::Int(ref inner) => write!(f, "\x1b[38;5;81m{}\x1b[0m", inner),
+         Object::Instance(ref inner) => write!(f, "{}", inner.borrow()),
+         Object::ClassField(ref c) => write!(f, "{}", c.value),
+         Object::Native(ref inner) => write!(f, "{}", inner),
+         Object::String(ref inner) => write!(f, "{}", inner),
+         Object::Bool(inner) => write!(f, "\x1b[38;5;3m{}\x1b[0m", if inner { "true" } else { "false" }),
+         Object::Iter(ref inner) => write!(f, "{}", inner.borrow()),
+         Object::Function(ref inner) => write!(f, "{}", inner.borrow()),
+         Object::Closure(ref inner) => write!(f, "{}", inner),
+         Object::BoundMethod(ref inner) => write!(f, "{}", inner),
+         Object::BoundNativeMethod(ref inner) => write!(f, "{}", inner),
+         Object::Null => f.write_str("\x1b[37;1mnull\x1b[0m"),
          Object::Float(ref inner) => {
-            let str = String::from("\x1b[38;5;81m")
-                    + inner.to_string().as_str()
-                    + if inner.fract() == 0.0 { ".0" } else { "" } // display the .0
-                    + String::from("\x1b[0m").as_str();
-            fmt::Display::fmt(&str, f)
+            let fractional = if inner.fract() == 0.0 { ".0" } else { "" };
+            write!(f, "\x1b[38;5;81m{}{}\x1b[0m", inner, fractional)
          }
-         Object::String(ref inner) => fmt::Display::fmt(inner.as_str(), f),
-         Object::Bool(inner) => {
-            let str = if inner {
-               String::from("\x1b[38;5;3mtrue\x1b[0m")
-            } else {
-               String::from("\x1b[38;5;3mfalse\x1b[0m")
-            };
-
-            fmt::Display::fmt(&str, f)
+         Object::Range(ref inner) => {
+            write!(
+               f,
+               "[\x1b[38;5;81m{}\x1b[0m..\x1b[38;5;81m{}\x1b[0m]",
+               inner.min, inner.max
+            )
+         }
+         Object::Class(ref inner) => {
+            let prt_str = format!("{:p}", &*inner.borrow() as *const _);
+            fmt::Display::fmt(&format!("<Class '{}' at {}>", inner.borrow().name, prt_str), f)
          }
          Object::Array(ref inner) => {
             let arr = &inner.borrow();
@@ -430,69 +569,6 @@ impl<'a> fmt::Display for Object {
 
             write!(f, "{}", arr_str)
          }
-         Object::Range(ref inner) => {
-            write!(
-               f,
-               "[\x1b[38;5;81m{}\x1b[0m..\x1b[38;5;81m{}\x1b[0m]",
-               inner.min, inner.max
-            )
-         }
-         Object::Iter(ref inner) => {
-            let str = format!("<Iterable '{}'>", inner.borrow().iter.type_name());
-            fmt::Display::fmt(&str, f)
-         }
-         Object::Function(ref inner) => {
-            let name = &inner.borrow().name;
-
-            let str = if name.is_empty() {
-               String::from("<script>")
-            } else {
-               let prt_str = format!("{:p}", &*inner.borrow() as *const _);
-               format!("<Func '{}' at {}>", name, prt_str)
-            };
-
-            fmt::Display::fmt(&str, f)
-         }
-         Object::Closure(ref inner) => {
-            let name = &inner.function.borrow().name;
-
-            let str = if name.is_empty() {
-               String::from("<Func script>")
-            } else {
-               let prt_str = format!("{:p}", &*inner.function.borrow() as *const _);
-               format!("<Func '{}' at {}>", name, prt_str)
-            };
-
-            fmt::Display::fmt(&str, f)
-         }
-         Object::BoundMethod(ref inner) => {
-            let name = &inner.method.function.borrow().name;
-
-            let str = if name.is_empty() {
-               String::from("<Func script>")
-            } else {
-               format!(
-                  "<Method '{}' in '{}'>",
-                  name,
-                  inner.receiver.borrow().class.borrow().name
-               )
-            };
-
-            fmt::Display::fmt(&str, f)
-         }
-         Object::Class(ref inner) => {
-            let prt_str = format!("{:p}", &*inner.borrow() as *const _);
-            fmt::Display::fmt(&format!("<Class '{}' at {}>", inner.borrow().name, prt_str), f)
-         }
-         Object::Instance(ref inner) => fmt::Display::fmt(
-            &format!("<Instance of '{}'>", inner.borrow().class.borrow().name),
-            f,
-         ),
-         Object::ClassField(ref c) => fmt::Display::fmt(c.value.as_ref(), f),
-         Object::Native(ref inner) => {
-            let str = format!("<NativeFn '{}'>", inner.name);
-            fmt::Display::fmt(&str, f)
-         }
          Object::Dict(ref inner) => {
             let mut arr_str = String::from("{");
 
@@ -508,7 +584,6 @@ impl<'a> fmt::Display for Object {
 
             write!(f, "{}", arr_str)
          }
-         Object::Null => f.write_str("\x1b[37;1mnull\x1b[0m"),
       }
    }
 }

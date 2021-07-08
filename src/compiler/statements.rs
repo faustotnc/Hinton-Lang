@@ -1,9 +1,9 @@
-use crate::ast::*;
-use crate::bytecode::OpCode;
 use crate::compiler::symbols::{Symbol, SymbolTable, SymbolType};
 use crate::compiler::{ClassScope, Compiler, CompilerCtx};
+use crate::core::ast::*;
+use crate::core::bytecode::OpCode;
+use crate::core::tokens::Token;
 use crate::errors::CompilerErrorType;
-use crate::lexer::tokens::Token;
 use crate::objects::Object;
 use std::borrow::Borrow;
 

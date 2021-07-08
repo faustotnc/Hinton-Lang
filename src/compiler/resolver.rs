@@ -1,8 +1,8 @@
-use crate::bytecode::OpCode;
 use crate::compiler::symbols::{Symbol, SymbolType, SL};
 use crate::compiler::{Compiler, UpValue};
+use crate::core::bytecode::OpCode;
+use crate::core::tokens::Token;
 use crate::errors::CompilerErrorType;
-use crate::lexer::tokens::Token;
 use crate::objects::Object;
 
 impl Compiler {
@@ -52,6 +52,30 @@ impl Compiler {
          );
 
          return Ok(SL::Native);
+      }
+
+      // Look for the identifier in the primitives
+      if self.primitives.contains(&token.lexeme) {
+         if reassign {
+            self.error_at_token(
+               token,
+               CompilerErrorType::Reassignment,
+               &format!("Cannot modify primitive class '{}'.", token.lexeme),
+            );
+
+            return Ok(SL::Error);
+         }
+
+         match self.add_literal_to_pool(Object::from(token.lexeme.as_str()), &token, false) {
+            None => return Ok(SL::Error),
+            Some(index) => self.emit_op_code_with_byte(
+               OpCode::LoadPrimitive,
+               index as u8,
+               (token.line_num, token.column_start),
+            ),
+         }
+
+         return Ok(SL::Primitive);
       }
 
       // The symbol doesn't exist

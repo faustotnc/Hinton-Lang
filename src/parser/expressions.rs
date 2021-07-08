@@ -17,12 +17,12 @@
 // Unary:           (~, !, -, not) <expr>
 // ==================================================================
 
-use crate::ast::ASTNode::*;
-use crate::ast::*;
-use crate::ast::{ASTNode, ReassignmentType};
-use crate::lexer::tokens::Token;
-use crate::lexer::tokens::TokenType::*;
-use crate::lexer::tokens::TokenType::{LOGIC_NOT_EQ, MINUS};
+use crate::core::ast::ASTNode::*;
+use crate::core::ast::*;
+use crate::core::ast::{ASTNode, ReassignmentType};
+use crate::core::tokens::Token;
+use crate::core::tokens::TokenType::*;
+use crate::core::tokens::TokenType::{LOGIC_NOT_EQ, MINUS};
 use crate::objects::Object;
 use crate::parser::Parser;
 
@@ -640,6 +640,32 @@ impl<'a> Parser {
                   None
                }
             };
+         }
+         FN_LAMBDA_KW => {
+            let fn_keyword = self.previous.clone();
+
+            self.consume(&L_PAREN, "Expected '(' before lambda expression parameters.");
+            let params = match self.parse_parameters() {
+               Some(p) => p,
+               None => return None,
+            };
+            self.consume(&L_CURLY, "Expected '{' for the function body.");
+
+            let min_arity = params.0;
+            let max_arity = params.1.len() as u8;
+
+            return Some(Lambda(FunctionDeclNode {
+               name: fn_keyword,
+               params: params.1,
+               arity: (min_arity, max_arity),
+               body: match self.parse_block() {
+                  Some(node) => match node {
+                     BlockStmt(b) => b.body,
+                     _ => unreachable!("Should have parsed a block statement."),
+                  },
+                  None => return None,
+               },
+            }));
          }
          _ => {
             self.error_at_previous("Unexpected token.");

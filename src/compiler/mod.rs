@@ -1,8 +1,10 @@
-use crate::ast::{ASTNode, ModuleNode};
-use crate::bytecode::{Chunk, OpCode};
+use crate::built_in::BuiltIn;
 use crate::compiler::symbols::{Symbol, SymbolTable, SymbolType};
+use crate::core::ast::{ASTNode, ModuleNode};
+use crate::core::bytecode::OpCode;
+use crate::core::chunk::Chunk;
+use crate::core::tokens::Token;
 use crate::errors::{CompilerErrorType, ErrorReport};
-use crate::lexer::tokens::Token;
 use crate::objects::{FuncObject, Object};
 use std::convert::TryFrom;
 use std::path::Path;
@@ -53,6 +55,7 @@ enum CompilerCtx {
    Init,
    Method,
    Script,
+   Lambda,
 }
 
 /// A special type of scope for compiling function declarations.
@@ -101,6 +104,8 @@ pub struct Compiler {
    globals: SymbolTable,
    /// A list of string names of Hinton native functions.
    natives: Vec<String>,
+   /// A list of string names of Hinton primitive classes.
+   primitives: Vec<String>,
    /// A list of compiler errors generated while compiling the program.
    errors: Vec<ErrorReport>,
    /// The type of chunk currently being compiled.
@@ -126,7 +131,7 @@ impl Compiler {
    pub fn compile_ast(
       filepath: &Path,
       program: &ASTNode,
-      natives: Vec<String>,
+      built_in: &BuiltIn,
    ) -> Result<FuncObject, Vec<ErrorReport>> {
       // The first element in a symbol table is always the symbol representing
       // the function to which the symbol table belongs.
@@ -161,7 +166,8 @@ impl Compiler {
          functions: vec![base_fn],
          errors: vec![],
          globals: SymbolTable::new(vec![]),
-         natives,
+         natives: built_in.natives.get_names(),
+         primitives: built_in.primitives.get_names(),
          classes: vec![],
       };
 
@@ -198,6 +204,7 @@ impl Compiler {
          ASTNode::Identifier(x) => self.compile_identifier_expr(x),
          ASTNode::IfStmt(x) => self.compile_if_stmt(x),
          ASTNode::Instance(x) => self.compile_inst_or_func_call_expr(x, true),
+         ASTNode::Lambda(x) => self.compile_function_decl(x, CompilerCtx::Lambda),
          ASTNode::Literal(x) => self.compile_literal_expr(x),
          ASTNode::LoopBranch(x) => self.compile_loop_branching_stmt(x),
          ASTNode::Module(x) => self.compile_module_node(x),
@@ -298,7 +305,7 @@ impl Compiler {
    /// Pretty-prints the compiled chunk of bytecode fot the current function.
    #[cfg(feature = "show_bytecode")]
    fn print_pretty_bytecode(&self) {
-      crate::bytecode::disassemble_function_scope(
+      crate::core::bytecode::disassemble_function_scope(
          &self.current_func_scope().function.chunk,
          &self.natives,
          &self.current_func_scope().function.name,
@@ -308,7 +315,7 @@ impl Compiler {
    /// Prints the raw bytes compiled into the current function's chunk.
    #[cfg(feature = "show_raw_bytecode")]
    fn print_raw_bytecode(&self) {
-      crate::bytecode::print_raw(
+      crate::core::bytecode::print_raw(
          self.current_chunk(),
          self.current_func_scope().function.name.clone().as_str(),
       );

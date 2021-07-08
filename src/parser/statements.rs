@@ -1,8 +1,8 @@
-use crate::ast::ASTNode;
-use crate::ast::ASTNode::*;
-use crate::ast::*;
-use crate::lexer::tokens::TokenType::*;
-use crate::lexer::tokens::{Token, TokenType};
+use crate::core::ast::ASTNode;
+use crate::core::ast::ASTNode::*;
+use crate::core::ast::*;
+use crate::core::tokens::TokenType::*;
+use crate::core::tokens::{Token, TokenType};
 use crate::objects::Object;
 use crate::parser::Parser;
 
@@ -78,7 +78,7 @@ impl Parser {
    }
 
    /// Parses a block statement.
-   fn parse_block(&mut self) -> Option<ASTNode> {
+   pub(super) fn parse_block(&mut self) -> Option<ASTNode> {
       let mut body: Vec<ASTNode> = vec![];
 
       while !self.check(&R_CURLY) && !self.check(&EOF) {
@@ -322,51 +322,20 @@ impl Parser {
       );
 
       let name = self.previous.clone();
+
       self.consume(&L_PAREN, "Expected '(' after function name.");
-
-      let mut params: Vec<Parameter> = vec![];
-      let mut min_arity: u8 = 0;
-      let mut max_arity: u8 = 0;
-
-      while !self.matches(&R_PARENTHESIS) {
-         if params.len() >= 255 {
-            self.error_at_current("Can't have more than 255 parameters.");
-            return None;
-         }
-
-         match self.parse_parameter() {
-            Some(p) => {
-               if !params.is_empty() && !p.is_optional && params.last().unwrap().is_optional {
-                  self.error_at_token(
-                     &params.last().unwrap().name.clone(),
-                     "Optional and named parameters must be declared after all required parameters.",
-                  );
-                  return None;
-               }
-
-               max_arity += 1;
-
-               if !p.is_optional {
-                  min_arity += 1
-               }
-
-               params.push(p);
-            }
-            None => return None, // Could not parse the parameter
-         }
-
-         if !self.matches(&R_PARENTHESIS) {
-            self.consume(&COMMA, "Expected a ',' between the parameter declarations.");
-         } else {
-            break;
-         }
-      }
-
+      let params = match self.parse_parameters() {
+         Some(p) => p,
+         None => return None,
+      };
       self.consume(&L_CURLY, "Expected '{' for the function body.");
+
+      let min_arity = params.0;
+      let max_arity = params.1.len() as u8;
 
       return Some(FunctionDeclNode {
          name,
-         params: params.into_boxed_slice(),
+         params: params.1,
          arity: (min_arity, max_arity),
          body: match self.parse_block() {
             Some(node) => match node {
@@ -379,35 +348,64 @@ impl Parser {
    }
 
    /// Parses a parameter declaration.
-   fn parse_parameter(&mut self) -> Option<Parameter> {
-      self.consume(&IDENTIFIER, "Expected a parameter name.");
+   pub(super) fn parse_parameters(&mut self) -> Option<(u8, Box<[Parameter]>)> {
+      let mut params: Vec<Parameter> = vec![];
+      let mut min_arity: u8 = 0;
 
-      let name = self.previous.clone();
+      while !self.matches(&R_PARENTHESIS) {
+         if params.len() >= 255 {
+            self.error_at_current("Can't have more than 255 parameters.");
+            return None;
+         }
 
-      if self.matches(&QUESTION) {
-         return Some(Parameter {
-            name,
-            is_optional: true,
-            default: None,
-         });
+         self.consume(&IDENTIFIER, "Expected a parameter name.");
+         let name = self.previous.clone();
+
+         let param = if self.matches(&QUESTION) {
+            Parameter {
+               name,
+               is_optional: true,
+               default: None,
+            }
+         } else if self.matches(&COLON_EQUALS) {
+            Parameter {
+               name,
+               is_optional: true,
+               default: match self.parse_expression() {
+                  Some(x) => Some(Box::new(x)),
+                  None => return None, // Could not compile default value for parameter
+               },
+            }
+         } else {
+            Parameter {
+               name,
+               is_optional: false,
+               default: None,
+            }
+         };
+
+         if !params.is_empty() && !param.is_optional && params.last().unwrap().is_optional {
+            self.error_at_token(
+               &params.last().unwrap().name.clone(),
+               "Optional and named parameters must be declared after all required parameters.",
+            );
+            return None;
+         }
+
+         if !param.is_optional {
+            min_arity += 1
+         }
+
+         params.push(param);
+
+         if !self.matches(&R_PARENTHESIS) {
+            self.consume(&COMMA, "Expected a ',' between the parameter declarations.");
+         } else {
+            break;
+         }
       }
 
-      if self.matches(&COLON_EQUALS) {
-         return Some(Parameter {
-            name,
-            is_optional: true,
-            default: match self.parse_expression() {
-               Some(x) => Some(Box::new(x)),
-               None => return None, // Could not compile default value for parameter
-            },
-         });
-      }
-
-      Some(Parameter {
-         name,
-         is_optional: false,
-         default: None,
-      })
+      Some((min_arity, params.into_boxed_slice()))
    }
 
    /// Parses a `return` statement.

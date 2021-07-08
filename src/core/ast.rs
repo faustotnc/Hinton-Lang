@@ -1,4 +1,4 @@
-use crate::lexer::tokens::Token;
+use crate::core::tokens::Token;
 use crate::objects::Object;
 
 #[derive(Clone)]
@@ -22,6 +22,7 @@ pub enum ASTNode {
    Tuple(TupleExprNode),
    Unary(UnaryExprNode),
    VarReassignment(VarReassignmentExprNode),
+   Lambda(FunctionDeclNode),
 
    // Declarations
    ClassDecl(ClassDeclNode),

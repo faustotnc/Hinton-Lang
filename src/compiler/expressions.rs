@@ -1,9 +1,9 @@
-use crate::ast::*;
-use crate::bytecode::OpCode;
 use crate::compiler::symbols::SL;
 use crate::compiler::Compiler;
+use crate::core::ast::*;
+use crate::core::bytecode::OpCode;
+use crate::core::tokens::Token;
 use crate::errors::CompilerErrorType;
-use crate::lexer::tokens::Token;
 use crate::objects::Object;
 
 impl Compiler {

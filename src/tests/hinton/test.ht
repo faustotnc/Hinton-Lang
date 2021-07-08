@@ -369,3 +369,17 @@ assert_eq(repeated_func_two, repeated_func_name);
 // declared in different memory locations, therefore they
 // should not be the same.
 assert_ne(repeated_func_one, repeated_func_name);
+
+// Test lambda functions
+func execute_operator(v1, v2, operator) {
+    return operator(v1, v2);
+}
+
+var result = execute_operator(5, 98, fn(val1, val2) {
+    return val1 + val2;
+});
+
+assert_eq(result, 103);
+
+// Test primitives
+assert_eq(103.to_string(), "103");

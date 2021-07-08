@@ -1,7 +1,7 @@
-use crate::ast::{ASTNode, ModuleNode};
+use crate::core::ast::{ASTNode, ModuleNode};
+use crate::core::tokens::TokenType::*;
+use crate::core::tokens::{Token, TokenType};
 use crate::errors::ErrorReport;
-use crate::lexer::tokens::TokenType::*;
-use crate::lexer::tokens::{Token, TokenType};
 use crate::lexer::Lexer;
 
 // Submodules

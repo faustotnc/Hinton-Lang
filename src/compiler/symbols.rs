@@ -25,6 +25,8 @@ pub enum SL {
    UpValue(UpValue, usize),
    /// Represents a native function symbol.
    Native,
+   /// Represents a built-in primitive symbol.
+   Primitive,
    /// Represents a symbol that was found, but there
    /// was an error with its resolution.
    Error,

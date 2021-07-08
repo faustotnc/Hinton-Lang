@@ -14,3 +14,4 @@ show_raw_bytecode = []
 [dependencies]
 num-derive = "0.3"
 num-traits = "0.2"
+hashbrown = "0.11"

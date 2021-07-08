@@ -1,17 +1,15 @@
+use crate::built_in::NativeFn;
 use crate::errors::RuntimeErrorType;
 use crate::objects::{IterObject, NativeFuncObj, Object};
-use crate::virtual_machine::RuntimeResult;
+use crate::virtual_machine::{RuntimeResult, VM};
+use hashbrown::{hash_map, HashMap};
 use std::cell::RefCell;
-use std::collections::{hash_map, HashMap};
 use std::io;
 use std::rc::Rc;
 use std::time::SystemTime;
 
-/// Represents the body of a Hinton native function object.
-pub type NativeFn = fn(Vec<Object>) -> Result<Object, RuntimeResult>;
-
 /// Represents the list of native functions available through a Hinton program.
-pub struct Natives(HashMap<String, NativeFuncObj>);
+pub struct Natives(pub(crate) HashMap<String, NativeFuncObj>);
 
 /// The default implementation of a native function list.
 impl Default for Natives {
@@ -52,46 +50,12 @@ impl Natives {
       }
    }
 
-   /// Finds and executes a native function by name.
-   pub fn call_native(&mut self, name: &str, args: Vec<Object>) -> Result<Object, RuntimeResult> {
-      match self.0.get(name) {
-         Some(f) => {
-            let args_len = args.len() as u8;
-
-            // Checks the argument arity for the function call.
-            if args_len < f.min_arity || args_len > f.max_arity {
-               return if f.min_arity == f.max_arity {
-                  Err(RuntimeResult::Error {
-                     error: RuntimeErrorType::ArgumentError,
-                     message: format!("Expected {} arguments but got {} instead.", f.min_arity, args_len),
-                  })
-               } else {
-                  Err(RuntimeResult::Error {
-                     error: RuntimeErrorType::ArgumentError,
-                     message: format!(
-                        "Expected {} to {} arguments but got {} instead.",
-                        f.min_arity, f.max_arity, args_len
-                     ),
-                  })
-               };
-            }
-
-            // Calls the native function, and returns its result
-            (f.body)(args)
-         }
-         None => Err(RuntimeResult::Error {
-            error: RuntimeErrorType::ReferenceError,
-            message: format!("No native function named '{}'.", name),
-         }),
-      }
-   }
-
    /// Obtains the NativeFunctionObj associated with a native function name.
    pub fn get_native_fn_object(&self, idx: usize) -> Result<NativeFuncObj, RuntimeResult> {
       let name = self.0.keys().collect::<Vec<&String>>()[idx];
 
       match self.0.get(name) {
-         Some(f) => Ok(f.to_owned()),
+         Some(f) => Ok(f.clone()),
          None => Err(RuntimeResult::Error {
             error: RuntimeErrorType::ReferenceError,
             message: format!("No native function named '{}'.", name),
@@ -111,32 +75,35 @@ impl Natives {
 
 /// Implements the `print(...)` native function for Hinton,
 /// which prints a value to the console.
-fn native_print(args: Vec<Object>) -> Result<Object, RuntimeResult> {
+fn native_print(vm: &mut VM, args: Vec<Object>) -> RuntimeResult {
    println!("{}", args[0]);
-   Ok(Object::Null)
+   vm.push_stack(Object::Null)
 }
 
 /// Implements the `clock()` native function for Hinton, which
 /// retrieves the current time from the Unix Epoch time.
-fn native_clock(_: Vec<Object>) -> Result<Object, RuntimeResult> {
+fn native_clock(vm: &mut VM, _: Vec<Object>) -> RuntimeResult {
    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
 
    match now {
       Ok(t) => {
          let time = t.as_millis();
-         Ok(Object::Int(time as i64))
+         vm.push_stack(Object::Int(time as i64))
       }
-      Err(_) => Err(RuntimeResult::Error {
+      Err(_) => RuntimeResult::Error {
          error: RuntimeErrorType::Internal,
          message: String::from("System's time before UNIX EPOCH."),
-      }),
+      },
    }
 }
 
 /// Implements the `iter(...)` native function for Hinton, which
 /// converts the give object to an iterable object.
-fn native_iter(args: Vec<Object>) -> Result<Object, RuntimeResult> {
-   make_iter(args[0].clone())
+fn native_iter(vm: &mut VM, args: Vec<Object>) -> RuntimeResult {
+   match make_iter(args[0].clone()) {
+      Ok(o) => vm.push_stack(o),
+      Err(e) => e,
+   }
 }
 
 /// Converts a Hinton object into an Iterable object.
@@ -165,13 +132,16 @@ pub fn make_iter(o: Object) -> Result<Object, RuntimeResult> {
 
 /// Implements the `next(...)` native function for Hinton, which
 /// retrieves the next item in an iterable object.
-fn native_next(args: Vec<Object>) -> Result<Object, RuntimeResult> {
+fn native_next(vm: &mut VM, args: Vec<Object>) -> RuntimeResult {
    match &args[0] {
-      Object::Iter(iter) => get_next_in_iter(iter),
-      _ => Err(RuntimeResult::Error {
+      Object::Iter(iter) => match get_next_in_iter(iter) {
+         Ok(o) => vm.push_stack(o),
+         Err(e) => e,
+      },
+      _ => RuntimeResult::Error {
          error: RuntimeErrorType::TypeError,
          message: format!("Object of type '{}' is not iterable.", args[0].type_name()),
-      }),
+      },
    }
 }
 
@@ -201,7 +171,7 @@ pub fn get_next_in_iter(o: &Rc<RefCell<IterObject>>) -> Result<Object, RuntimeRe
 
 /// Implements the `input(...)` native function for Hinton, which
 /// gets user input from the console.
-fn native_input(args: Vec<Object>) -> Result<Object, RuntimeResult> {
+fn native_input(vm: &mut VM, args: Vec<Object>) -> RuntimeResult {
    print!("{}", args[0]);
 
    // Print the programmer-provided message
@@ -212,29 +182,29 @@ fn native_input(args: Vec<Object>) -> Result<Object, RuntimeResult> {
          match io::stdin().read_line(&mut input) {
             Ok(_) => {
                input.pop(); // remove added newline
-               Ok(Object::String(input))
+               vm.push_stack(Object::String(input))
             }
-            Err(e) => Err(RuntimeResult::Error {
+            Err(e) => RuntimeResult::Error {
                error: RuntimeErrorType::Internal,
                message: format!("Failed to read input. IO failed read line. {}", e),
-            }),
+            },
          }
       }
-      Err(e) => Err(RuntimeResult::Error {
+      Err(e) => RuntimeResult::Error {
          error: RuntimeErrorType::Internal,
          message: format!("Failed to read input. IO failed flush. {}", e),
-      }),
+      },
    }
 }
 
 // Implements the `assert(...)` native function for Hinton, which checks that
 // the first argument of the function call is truthy, emitting a RuntimeError
 // (with an optional third parameter as its message) if the value is falsey.
-fn native_assert(args: Vec<Object>) -> Result<Object, RuntimeResult> {
+fn native_assert(vm: &mut VM, args: Vec<Object>) -> RuntimeResult {
    let value = args[0].clone();
 
    if !value.is_falsey() {
-      Ok(Object::Null)
+      vm.push_stack(Object::Null)
    } else {
       let message = if args.len() == 2 {
          args[1].clone()
@@ -242,22 +212,22 @@ fn native_assert(args: Vec<Object>) -> Result<Object, RuntimeResult> {
          Object::String(String::from("Assertion failed on a falsey value."))
       };
 
-      Err(RuntimeResult::Error {
+      RuntimeResult::Error {
          error: RuntimeErrorType::AssertionError,
          message: format!("{}", message),
-      })
+      }
    }
 }
 
 // Implements the `assert_eq(...)` native function for Hinton, which checks that
 // the first two arguments of the function call are equal, emitting a RuntimeError
 // (with an optional third parameter as its message) if the values are not equal.
-fn native_assert_eq(args: Vec<Object>) -> Result<Object, RuntimeResult> {
+fn native_assert_eq(vm: &mut VM, args: Vec<Object>) -> RuntimeResult {
    let value1 = args[0].clone();
    let value2 = args[1].clone();
 
    if value1.equals(&value2) {
-      Ok(Object::Null)
+      vm.push_stack(Object::Null)
    } else {
       let message = if args.len() == 3 {
          args[2].clone()
@@ -265,22 +235,22 @@ fn native_assert_eq(args: Vec<Object>) -> Result<Object, RuntimeResult> {
          Object::String(String::from("Assertion values are not equal."))
       };
 
-      Err(RuntimeResult::Error {
+      RuntimeResult::Error {
          error: RuntimeErrorType::AssertionError,
          message: format!("{}", message),
-      })
+      }
    }
 }
 
 // Implements the `assert_ne(...)` native function for Hinton, which checks that
 // the first two arguments of the function call are not equal, emitting a RuntimeError
 // (with an optional third parameter as its message) if the values are equal.
-fn native_assert_ne(args: Vec<Object>) -> Result<Object, RuntimeResult> {
+fn native_assert_ne(vm: &mut VM, args: Vec<Object>) -> RuntimeResult {
    let value1 = args[0].clone();
    let value2 = args[1].clone();
 
    if !value1.equals(&value2) {
-      Ok(Object::Null)
+      vm.push_stack(Object::Null)
    } else {
       let message = if args.len() == 3 {
          args[2].clone()
@@ -288,9 +258,9 @@ fn native_assert_ne(args: Vec<Object>) -> Result<Object, RuntimeResult> {
          Object::String(String::from("Assertion values are equal."))
       };
 
-      Err(RuntimeResult::Error {
+      RuntimeResult::Error {
          error: RuntimeErrorType::AssertionError,
          message: format!("{}", message),
-      })
+      }
    }
 }

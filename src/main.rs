@@ -1,17 +1,16 @@
 #[macro_use]
 extern crate num_derive;
 
-use crate::virtual_machine::{InterpretResult, VirtualMachine};
 use std::io::ErrorKind;
 use std::{env, fs};
 
-// Crate-level Modules
-mod ast;
-mod bytecode;
+use crate::virtual_machine::{InterpretResult, VM};
+
+mod built_in;
 mod compiler;
+mod core;
 mod errors;
 mod lexer;
-mod natives;
 mod objects;
 mod parser;
 mod virtual_machine;
@@ -110,7 +109,7 @@ fn run_file(filename: &str) {
    };
 
    // Interprets the source contents in the VM
-   let result = VirtualMachine::interpret(filepath, &contents);
+   let result = VM::interpret(filepath, &contents);
 
    // Exit the interpreter with the appropriate code
    match result {

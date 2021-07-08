@@ -1,9 +1,9 @@
-use crate::lexer::tokens::{Token, TokenType};
+use crate::core::tokens;
+use crate::core::tokens::{Token, TokenType};
 
 // Submodules
 pub mod lex_next_token;
 pub mod lex_numbers;
-pub mod tokens;
 
 /// Struct that represents the scanner.
 pub struct Lexer {
