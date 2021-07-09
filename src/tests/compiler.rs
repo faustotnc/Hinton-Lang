@@ -188,7 +188,7 @@ fn functions_have_access_to_global_vars() {
 fn cannot_return_from_init() {
    let src = "
       class SomeOne {
-         func init() {
+         pub func init() {
             return \"hello\";
          }
       }
