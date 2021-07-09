@@ -80,11 +80,21 @@ impl BuiltIn {
    ///
    /// BuiltIn::call_native_fn(&mut vm, fn_print, vec![Object::Bool(true)])
    /// ```
-   pub fn call_native_fn(vm: &mut VM, func: NativeFuncObj, args: Vec<Object>) -> RuntimeResult {
+   pub fn call_native_fn(vm: &mut VM, func: NativeFuncObj, arg_count: u8) -> RuntimeResult {
       // Checks the argument arity for the function call.
-      if let Err(e) = vm.arity_check(func.min_arity, func.max_arity, args.len() as u8) {
+      if let Err(e) = vm.arity_check(func.min_arity, func.max_arity, arg_count) {
          return e;
       }
+
+      let mut args: Vec<Object> = Vec::with_capacity(arg_count as usize);
+      for _ in 0..arg_count {
+         let val = vm.pop_stack();
+         args.push(val);
+      }
+      args.reverse();
+
+      // Pop native function object off the stack before calling it.
+      vm.pop_stack();
 
       // Calls the native function, and returns its result.
       (func.body)(vm, args)
@@ -115,11 +125,21 @@ impl BuiltIn {
    ///
    /// BuiltIn::call_bound_method(&mut vm, array_len_method, vec![]);
    /// ```
-   pub fn call_bound_method(vm: &mut VM, func: NativeMethodObj, args: Vec<Object>) -> RuntimeResult {
+   pub fn call_bound_method(vm: &mut VM, func: NativeMethodObj, arg_count: u8) -> RuntimeResult {
       // Checks the argument arity for the function call.
-      if let Err(e) = vm.arity_check(func.min_arity, func.max_arity, args.len() as u8) {
+      if let Err(e) = vm.arity_check(func.min_arity, func.max_arity, arg_count) {
          return e;
       }
+
+      let mut args: Vec<Object> = Vec::with_capacity(arg_count as usize);
+      for _ in 0..arg_count {
+         let val = vm.pop_stack();
+         args.push(val);
+      }
+      args.reverse();
+
+      // Pop native function object off the stack before calling it.
+      vm.pop_stack();
 
       // Calls the native function, and returns its result.
       (func.body)(vm, *func.value, args)

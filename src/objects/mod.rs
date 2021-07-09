@@ -1,7 +1,6 @@
 use crate::built_in::{NativeBoundMethod, NativeFn};
 use crate::core::chunk::Chunk;
-use crate::errors::RuntimeErrorType;
-use crate::virtual_machine::RuntimeResult;
+use crate::objects::class_obj::*;
 use hashbrown::HashMap;
 use std::cell::RefCell;
 use std::fmt;
@@ -9,6 +8,7 @@ use std::fmt::Formatter;
 use std::rc::Rc;
 
 // Submodules
+pub mod class_obj;
 pub mod indexing;
 mod native_operations;
 
@@ -131,83 +131,6 @@ impl UpValRef {
    }
 }
 
-/// Represents a Hinton class object.
-#[derive(Clone)]
-pub struct ClassObject {
-   pub name: String,
-   pub members: HashMap<String, Object>,
-}
-
-impl fmt::Display for ClassObject {
-   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-      write!(f, "<Class '{}' at {:p}>", self.name, &*self as *const _)
-   }
-}
-impl ClassObject {
-   pub fn new(name: &str) -> Self {
-      Self {
-         name: name.to_string(),
-         members: HashMap::new(),
-      }
-   }
-
-   pub fn get(&self, name: String) -> Result<Object, RuntimeResult> {
-      match self.members.get(&name) {
-         Some(o) => Ok(o.clone()),
-         None => Err(RuntimeResult::Error {
-            error: RuntimeErrorType::ReferenceError,
-            message: format!(
-               "Property '{}' not defined in object of type '{}'.",
-               name, self.name
-            ),
-         }),
-      }
-   }
-}
-
-/// Represents a Hinton Instance object.
-#[derive(Clone)]
-pub struct InstanceObject {
-   pub class: Rc<RefCell<ClassObject>>,
-   pub members: HashMap<String, Object>,
-}
-
-impl fmt::Display for InstanceObject {
-   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-      write!(
-         f,
-         "<Instance of '{}' at {:p}>",
-         self.class.borrow().name,
-         &*self as *const _
-      )
-   }
-}
-
-/// Represents a Hinton bound method.
-#[derive(Clone)]
-pub struct BoundMethod {
-   pub receiver: Rc<RefCell<InstanceObject>>,
-   pub method: ClosureObject,
-}
-
-impl fmt::Display for BoundMethod {
-   fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
-      let receiver = &self.receiver.borrow();
-      let class_name = &receiver.class.borrow().name;
-      let method_name = &self.method.function.borrow().name;
-      let prt_str = &*self.method.function.borrow() as *const _;
-
-      write!(f, "Method '{}.{}' at {:p}", class_name, method_name, prt_str)
-   }
-}
-
-/// Represents a Hinton class field.
-#[derive(Clone)]
-pub struct ClassFieldObject {
-   pub value: Box<Object>,
-   pub is_constant: bool,
-}
-
 /// All types of objects in Hinton
 #[derive(Clone)]
 pub enum Object {
@@ -216,7 +139,6 @@ pub enum Object {
    BoundMethod(BoundMethod),
    BoundNativeMethod(NativeMethodObj),
    Class(Rc<RefCell<ClassObject>>),
-   ClassField(ClassFieldObject),
    Closure(ClosureObject),
    Dict(Rc<RefCell<HashMap<String, Object>>>),
    Float(f64),
@@ -228,7 +150,7 @@ pub enum Object {
    Null,
    Range(RangeObject),
    String(String),
-   Tuple(Box<[Object]>),
+   Tuple(Rc<Vec<Object>>),
 }
 
 impl From<NativeFuncObj> for Object {
@@ -243,9 +165,21 @@ impl From<NativeMethodObj> for Object {
    }
 }
 
+impl From<FuncObject> for Object {
+   fn from(o: FuncObject) -> Self {
+      Object::Function(Rc::new(RefCell::new(o)))
+   }
+}
+
 impl From<ClassObject> for Object {
    fn from(o: ClassObject) -> Self {
       Object::Class(Rc::new(RefCell::new(o)))
+   }
+}
+
+impl From<InstanceObject> for Object {
+   fn from(o: InstanceObject) -> Self {
+      Object::Instance(Rc::new(RefCell::new(o)))
    }
 }
 
@@ -295,7 +229,6 @@ impl Object {
          | Self::Closure(_)
          | Self::BoundMethod(_)
          | Self::BoundNativeMethod(_) => String::from("Function"),
-         Self::ClassField(c) => c.value.type_name(),
          Self::Int(_) => String::from("Int"),
          Self::Iter(_) => String::from("Iter"),
          Self::Null => String::from("Null"),
@@ -334,7 +267,6 @@ impl Object {
          Self::Bool(val) => !val,
          Self::Int(x) if *x == 0i64 => true,
          Self::Float(x) if *x == 0f64 => true,
-         Self::ClassField(c) => c.value.is_falsey(),
          _ => false,
       }
    }
@@ -383,13 +315,6 @@ impl Object {
    /// Checks that this object is equal to the provided object according to Hinton's rules for
    /// object equality.
    pub fn equals(&self, right: &Object) -> bool {
-      // If the rhs is a class field, we match `self` against the wrapped
-      // value of the field, making recursive calls to `Object.equals(...)`
-      // in case the value is itself also a class field.
-      if let Object::ClassField(r) = right {
-         return self.equals(&r.value);
-      }
-
       match self {
          Object::Int(i) => match right {
             Object::Int(x) if i == x => true,
@@ -469,13 +394,6 @@ impl Object {
                false
             }
          }
-         Object::ClassField(c1) => {
-            if let Object::ClassField(c2) = right {
-               c1.value.equals(&c2.value)
-            } else {
-               c1.value.equals(right)
-            }
-         }
          Object::Native(n1) => {
             if let Object::Native(n2) = right {
                n1.name == n2.name
@@ -516,7 +434,6 @@ impl<'a> fmt::Display for Object {
       match *self {
          Object::Int(ref inner) => write!(f, "\x1b[38;5;81m{}\x1b[0m", inner),
          Object::Instance(ref inner) => write!(f, "{}", inner.borrow()),
-         Object::ClassField(ref c) => write!(f, "{}", c.value),
          Object::Native(ref inner) => write!(f, "{}", inner),
          Object::String(ref inner) => write!(f, "{}", inner),
          Object::Bool(inner) => write!(f, "\x1b[38;5;3m{}\x1b[0m", if inner { "true" } else { "false" }),

@@ -1,7 +1,8 @@
 use crate::built_in::primitives::HTPrimitive;
 use crate::built_in::NativeBoundMethod;
 use crate::errors::RuntimeErrorType;
-use crate::objects::{ClassObject, Object};
+use crate::objects::class_obj::{ClassField, ClassObject};
+use crate::objects::Object;
 use crate::virtual_machine::{RuntimeResult, VM};
 use hashbrown::HashMap;
 
@@ -14,8 +15,12 @@ impl HTPrimitive for IntClass {
       self.name.clone()
    }
 
-   fn members(&mut self) -> &mut HashMap<String, Object> {
+   fn members(&mut self) -> &mut HashMap<String, ClassField> {
       &mut self.members
+   }
+
+   fn statics(&mut self) -> &mut HashMap<String, ClassField> {
+      &mut self.statics
    }
 }
 
@@ -24,9 +29,11 @@ impl Default for IntClass {
    fn default() -> Self {
       let mut _self = ClassObject::new("Int");
 
-      // >>>>>>> Native methods for the "Int" primitive type to be added after this line
-      _self.bind_method("to_string", (0, 0), int_to_string as NativeBoundMethod);
-      // <<<<<<< Native methods for the "Int" primitive type to be added before this line
+      // >>>>>>> Class fields for the "Int" primitive type to be added after this line
+      _self.bind_non_static_method("to_string", (0, 0), int_to_string as NativeBoundMethod);
+      _self.bind_field("MIN", true, true, false, true, Object::Int(i64::MIN));
+      _self.bind_field("MAX", true, true, false, true, Object::Int(i64::MAX));
+      // <<<<<<< Class fields for the "Int" primitive type to be added before this line
 
       _self
    }

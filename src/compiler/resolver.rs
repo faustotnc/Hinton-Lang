@@ -147,7 +147,7 @@ impl Compiler {
             .check_reassignment(&resolution, token, for_reassignment)
             .is_ok()
          {
-            let name = Object::String(token.lexeme.clone());
+            let name = Object::from(token.lexeme.clone());
             if let Some(idx) = self.add_literal_to_pool(name, &token, false) {
                return Some(SL::Global(resolution.0, idx as usize));
             }

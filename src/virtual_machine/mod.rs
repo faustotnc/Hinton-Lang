@@ -2,7 +2,8 @@ use crate::built_in::BuiltIn;
 use crate::compiler::Compiler;
 use crate::core::bytecode::OpCode;
 use crate::errors::{report_errors_list, report_runtime_error, RuntimeErrorType};
-use crate::objects::{ClosureObject, FuncObject, InstanceObject, Object, UpValRef};
+use crate::objects::class_obj::InstanceObject;
+use crate::objects::{ClosureObject, FuncObject, Object, UpValRef};
 use crate::parser::Parser;
 use crate::FRAMES_MAX;
 use hashbrown::HashMap;
@@ -60,7 +61,7 @@ pub struct VM {
    /// A list of call frames (the VM's call frames stack).
    frames: Vec<CallFrame>,
    /// A list of temporary objects (the VM's values stack).
-   stack: Vec<Object>,
+   pub(crate) stack: Vec<Object>,
    /// The global declarations made in the program.
    globals: HashMap<String, Object>,
    /// A collection of UpValues in the program.
@@ -193,7 +194,7 @@ impl VM {
    }
 
    /// Gets an immutable reference to the object at the provided stack-top offset.
-   fn peek_stack(&self, pos: usize) -> &Object {
+   pub(crate) fn peek_stack(&self, pos: usize) -> &Object {
       &self.stack[self.stack.len() - 1 - pos]
    }
 
@@ -235,41 +236,14 @@ impl VM {
    /// Tries to call the given object, or returns a runtime error if the object is not callable.
    fn call_object(&mut self, callee: Object, arg_count: u8) -> RuntimeResult {
       return match callee {
-         Object::ClassField(f) => self.call_object(*f.value, arg_count),
          Object::Function(obj) => self.call_function(obj, arg_count),
          Object::Closure(obj) => self.call_closure(obj, arg_count),
          Object::BoundMethod(obj) => {
             *self.peek_stack_mut(arg_count as usize) = Object::Instance(obj.receiver);
             self.call_closure(obj.method, arg_count)
          }
-         Object::Native(obj) => {
-            let mut args: Vec<Object> = vec![];
-            for _ in 0..arg_count {
-               let val = self.pop_stack();
-               args.push(val);
-            }
-            args.reverse();
-
-            // Pop native function object off the stack before calling it.
-            self.pop_stack();
-
-            // Execute the native function
-            BuiltIn::call_native_fn(self, *obj, args)
-         }
-         Object::BoundNativeMethod(obj) => {
-            let mut args: Vec<Object> = vec![];
-            for _ in 0..arg_count {
-               let val = self.pop_stack();
-               args.push(val);
-            }
-            args.reverse();
-
-            // Pop native function object off the stack before calling it.
-            self.pop_stack();
-
-            // Execute the native function
-            BuiltIn::call_bound_method(self, obj, args)
-         }
+         Object::Native(obj) => BuiltIn::call_native_fn(self, *obj, arg_count),
+         Object::BoundNativeMethod(obj) => BuiltIn::call_bound_method(self, obj, arg_count),
          _ => RuntimeResult::Error {
             error: RuntimeErrorType::TypeError,
             message: format!("Cannot call object of type '{}'.", callee.type_name()),
@@ -391,23 +365,21 @@ impl VM {
          }
       };
 
-      let members = &class.borrow().members;
-      let new_instance = Object::Instance(Rc::new(RefCell::new(InstanceObject {
+      let new_instance = Object::from(InstanceObject {
          class: class.clone(),
-         members: members.clone(),
-      })));
+         members: class.borrow().members.clone(),
+      });
 
       let class_pos = self.stack.len() - (arg_count as usize) - 1;
       self.stack[class_pos] = new_instance;
 
-      if let Some(c) = members.get("init") {
-         return match c {
-            Object::Closure(cls) => self.call_closure(cls.clone(), arg_count),
-            _ => RuntimeResult::Error {
-               error: RuntimeErrorType::TypeError,
-               message: String::from("Class member 'init' can only be a method."),
-            },
-         };
+      match self.stack[class_pos].clone() {
+         Object::Instance(i) => {
+            if let Ok(value) = i.borrow().get_prop("init".to_string()) {
+               self.call_object(value, arg_count);
+            }
+         }
+         _ => unreachable!("Expected instance object ot stack offset."),
       }
 
       RuntimeResult::Continue

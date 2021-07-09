@@ -28,6 +28,8 @@ Though this interpreter is based on the Crafting Interpreters book, it implement
 
 * Hinton supports declaring variable and constant class fields from within the class declaration itself. Conversely, it does not allow settings any *new* properties from outside a class declaration.
 
+* Hinton supports the `pub`, and `static` access modifiers on class fields. Fields without a `pub` access modifier are private by default.
+
 ** Hinton is a work-in-progress, and many other features are yet to come. To see a list of the features currently being worked on, visit the [Planned Features](https://github.com/hinton-lang/Hinton/projects/1) page. For a list of features without a near-by implementation date, visit the [Missing Features](#missing-features) section of this README.
 
 <sub>**NOTE:** All highlighted Hinton code in this README is being highlighted by GitHub's Swift syntax highlighter for illustration purposes only. The code is not actual Swift code, and GitHub does not provide a syntax Highlight for Hinton code.</sub>

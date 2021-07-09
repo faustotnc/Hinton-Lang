@@ -1,10 +1,10 @@
 // Test if-else statements
 var initial = 3;
-if (initial == 1 and true) {
+if initial == 1 and true {
     assert_eq(initial, 1);
-} else if (initial == 2) {
+} else if initial == 2 {
     assert_eq(initial, 2);
-} else if (initial == 3) {
+} else if initial == 3 {
     assert_eq(initial, 3);
 } else {
     assert(initial > 3);
@@ -71,25 +71,25 @@ assert_eq(next(string_iter), "k");
 // Test accessing and modifying variables
 // from within the scope of a child function.
 func outer() {
-  var x = "old value";
-
-  func middle() {
-      assert_eq(x, "old value");
-
-      func inner() {
-          assert_eq(x, "old value");
-          x = "new value";
-          assert_eq(x, "new value");
-      }
-
-      assert_eq(x, "old value");
-      inner();
-      assert_eq(x, "new value");
-  }
-
-  assert_eq(x, "old value");
-  middle();
-  assert_eq(x, "new value");
+    var x = "old value";
+    
+    func middle() {
+        assert_eq(x, "old value");
+        
+        func inner() {
+            assert_eq(x, "old value");
+            x = "new value";
+            assert_eq(x, "new value");
+        }
+        
+        assert_eq(x, "old value");
+        inner();
+        assert_eq(x, "new value");
+    }
+    
+    assert_eq(x, "old value");
+    middle();
+    assert_eq(x, "new value");
 }
 
 outer();
@@ -180,7 +180,6 @@ assert_eq(globalOne(), 1);
 assert_eq(globalTwo(), 2);
 
 
-
 // Test the continue statement
 var odds = [1, 3, 5, 7, 9];
 var ith = 0;
@@ -208,13 +207,13 @@ assert_eq(ith, 5);
 
 // Basic tetsing for classes
 class Person {
-    var name;
+    pub var name;
     
-    func set_name(name) {
+    pub func set_name(name) {
         self.name = name;
     }
 
-    func get_name() {
+    pub func get_name() {
         return self.name;
     }
 }
@@ -243,18 +242,18 @@ assert_eq("Hunter", p2.get_name());
 
 // Test class initializer
 class Vec2D {
-    var x, y;
+    pub var x, y;
 
-    func init(x, y) {
+    pub func init(x, y) {
         self.x = x;
         self.y = y;
     }
 
-    func get_x() {
+    pub func get_x() {
         return self.x;
     }
 
-    func get_y() {
+    pub func get_y() {
         return self.y;
     }
 }
@@ -276,7 +275,7 @@ func wrapped_class() {
         }
 
         class inner_class {
-            var field_one = one;
+            pub var field_one = one;
         }
         
         class1 = inner_class;
@@ -290,7 +289,7 @@ func wrapped_class() {
         }
         
         class inner_class {
-            var field_two = two;
+            pub var field_two = two;
         }
         
         class2 = inner_class;

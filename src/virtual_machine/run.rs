@@ -3,6 +3,7 @@ use crate::built_in::BuiltIn;
 use crate::core::ast::{BinaryExprType, UnaryExprType};
 use crate::core::bytecode::OpCode;
 use crate::errors::RuntimeErrorType;
+use crate::objects::class_obj::{BoundMethod, ClassField, ClassObject};
 use crate::objects::indexing::to_bounded_index;
 use crate::objects::*;
 use crate::virtual_machine::{RuntimeResult, VM};
@@ -95,9 +96,7 @@ impl VM {
             OpCode::SetUpVal | OpCode::SetUpValLong => self.op_set_up_value(),
 
             // Classes & Instances
-            OpCode::AppendConstField => self.append_const_class_field(),
-            OpCode::AppendMethod => self.append_class_method(),
-            OpCode::AppendVarField => self.append_var_class_field(),
+            OpCode::AppendClassField => self.append_class_field(),
             OpCode::MakeClass | OpCode::MakeClassLong => self.op_make_class(),
             OpCode::MakeInstance => self.op_make_instance(),
 
@@ -387,19 +386,14 @@ impl VM {
          _ => unreachable!("Expected String for class name."),
       };
 
-      let new_class = Object::Class(Rc::new(RefCell::new(ClassObject {
-         name,
-         members: HashMap::new(),
-      })));
-      self.push_stack(new_class)
+      self.push_stack(Object::from(ClassObject::new(&name)))
    }
 
    /// Executes the instruction to create an instance from a class object.
    fn op_make_instance(&mut self) -> RuntimeResult {
-      // Instances can only have 255-MAX arguments
-      let arg_count = self.next_byte();
-      let maybe_instance = self.peek_stack(arg_count as usize).clone();
-      self.create_instance(maybe_instance, arg_count)
+      let arg_count = self.next_byte(); // Instances can only have 255-MAX arguments
+      let maybe_class = self.peek_stack(arg_count as usize).clone();
+      self.create_instance(maybe_class, arg_count)
    }
 
    /// Executes the instruction to get a property from an object.
@@ -413,22 +407,22 @@ impl VM {
 
       let value = self.pop_stack();
       match value {
-         Object::Instance(x) => match x.borrow().members.get(&prop_name) {
-            Some(o) => match o {
+         Object::Instance(x) => match x.borrow().get_prop(prop_name) {
+            Ok(o) => match o {
                Object::Closure(c) => self.push_stack(Object::BoundMethod(BoundMethod {
                   receiver: x.clone(),
-                  method: c.clone(),
+                  method: c,
                })),
-               _ => self.push_stack(o.clone()),
+               Object::Function(f) => self.push_stack(Object::BoundMethod(BoundMethod {
+                  receiver: x.clone(),
+                  method: ClosureObject {
+                     function: f,
+                     up_values: vec![],
+                  },
+               })),
+               _ => self.push_stack(o),
             },
-            None => RuntimeResult::Error {
-               error: RuntimeErrorType::ReferenceError,
-               message: format!(
-                  "Property '{}' not defined in object of type '{}'.",
-                  prop_name,
-                  x.borrow().class.borrow().name
-               ),
-            },
+            Err(e) => e,
          },
          Object::Dict(x) => match x.borrow().get(&prop_name) {
             Some(val) => self.push_stack(val.clone()),
@@ -439,7 +433,11 @@ impl VM {
          },
          Object::Int(_) => BuiltIn::primitive_prop(self, value, "Int", prop_name),
          Object::String(_) => BuiltIn::primitive_prop(self, value, "String", prop_name),
-         _ => todo!("Other objects also have properties."),
+         Object::Class(c) => match c.borrow().get_static_prop(prop_name) {
+            Ok(val) => self.push_stack(val),
+            Err(e) => e,
+         },
+         _ => todo!("Objects of type '{}' also have properties.", value.type_name()),
       }
    }
 
@@ -455,32 +453,10 @@ impl VM {
       let value = self.pop_stack();
 
       return match self.pop_stack() {
-         Object::Instance(inst) => {
-            let class_name = inst.borrow().class.borrow().name.clone();
-
-            match inst.borrow_mut().members.get_mut(&prop_name) {
-               Some(member) => match member {
-                  Object::ClassField(field) if !field.is_constant => {
-                     field.value = Box::new(value.clone());
-                     self.push_stack(value)
-                  }
-                  _ => RuntimeResult::Error {
-                     error: RuntimeErrorType::ReferenceError,
-                     message: format!(
-                        "Cannot reassign to immutable property '{}' in object of type '{}'.",
-                        prop_name, class_name
-                     ),
-                  },
-               },
-               None => RuntimeResult::Error {
-                  error: RuntimeErrorType::ReferenceError,
-                  message: format!(
-                     "Property '{}' not defined in object of type '{}'.",
-                     prop_name, class_name
-                  ),
-               },
-            }
-         }
+         Object::Instance(inst) => match inst.borrow_mut().set_prop(prop_name, value) {
+            Ok(o) => self.push_stack(o),
+            Err(e) => e,
+         },
          Object::Dict(dict) => {
             dict.borrow_mut().insert(prop_name, value.clone());
             self.push_stack(value)
@@ -663,7 +639,7 @@ impl VM {
          tuple_values.push(self.pop_stack());
       }
 
-      self.push_stack(Object::Tuple(tuple_values.into_boxed_slice()))
+      self.push_stack(Object::Tuple(Rc::new(tuple_values)))
    }
 
    /// Executes the instruction to create a dictionary object with the top `N` key-value
@@ -785,79 +761,41 @@ impl VM {
       self.push_stack(val)
    }
 
-   /// Appends (or binds) a function object to a class by converting it to a BoundMethod object.
-   fn append_class_method(&mut self) -> RuntimeResult {
-      let method = match self.pop_stack() {
-         Object::Function(f) => ClosureObject {
-            function: f,
-            up_values: vec![],
-         },
-         Object::Closure(c) => c,
-         _ => unreachable!("Expected Function or Closure on TOS for method binding."),
+   /// Appends a field to a class object.
+   fn append_class_field(&mut self) -> RuntimeResult {
+      let mode = self.next_byte();
+      let is_static = (mode & 4) == 4;
+
+      // Computes the new mode without the "static" bit.
+      let mode = if (mode & 8) == 8 {
+         (mode & 0b1111_0011) | 0b0000_0100
+      } else {
+         mode & 0b1111_0011
       };
 
-      let method_name = method.function.borrow().name.clone();
-      let maybe_class = self.peek_stack(0).clone();
-
-      match maybe_class {
-         Object::Class(c) => {
-            c.borrow_mut()
-               .members
-               .insert(method_name, Object::Closure(method));
-         }
-         _ => unreachable!("Expected Class object on TOS for method binding."),
-      }
-
-      RuntimeResult::Continue
-   }
-
-   /// Appends a variable field to a class object.
-   fn append_var_class_field(&mut self) -> RuntimeResult {
+      // Gets the field name string
       let field_name = match self.pop_stack() {
          Object::String(s) => s,
          _ => unreachable!("Expected String on TOS for class field."),
       };
 
-      let field_value = self.pop_stack();
-      let maybe_class = self.peek_stack(0).clone();
+      // Gets the field value
+      let value = Box::new(self.pop_stack());
 
-      match maybe_class {
+      match self.peek_stack(0).clone() {
          Object::Class(c) => {
-            c.borrow_mut().members.insert(
-               field_name,
-               Object::ClassField(ClassFieldObject {
-                  value: Box::new(field_value),
-                  is_constant: false,
-               }),
-            );
+            let mut class = c.borrow_mut();
+
+            // Gets the mutable reference to the appropriate hash_map to store the field
+            let storage = if is_static {
+               &mut class.statics
+            } else {
+               &mut class.members
+            };
+
+            storage.insert(field_name, ClassField { value, mode });
          }
-         _ => unreachable!("Expected Class object on TOS for variable field binding."),
-      }
-
-      RuntimeResult::Continue
-   }
-
-   /// Appends a constant field to a class object.
-   fn append_const_class_field(&mut self) -> RuntimeResult {
-      let field_name = match self.pop_stack() {
-         Object::String(s) => s,
-         _ => unreachable!("Expected String on TOS for constant class field."),
-      };
-
-      let field_value = self.pop_stack();
-      let maybe_class = self.peek_stack(0).clone();
-
-      match maybe_class {
-         Object::Class(c) => {
-            c.borrow_mut().members.insert(
-               field_name,
-               Object::ClassField(ClassFieldObject {
-                  value: Box::new(field_value),
-                  is_constant: true,
-               }),
-            );
-         }
-         _ => unreachable!("Expected Class object on TOS for constant field binding."),
+         _ => unreachable!("Expected Class object on TOS to bind field '{}'.", field_name),
       }
 
       RuntimeResult::Continue

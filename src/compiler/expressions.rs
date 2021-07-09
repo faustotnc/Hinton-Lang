@@ -273,7 +273,7 @@ impl Compiler {
    pub(super) fn compile_object_setter_expr(&mut self, expr: &ObjectSetExprNode) {
       self.compile_node(&expr.target);
 
-      let prop_name = Object::String(expr.setter.lexeme.clone());
+      let prop_name = Object::from(expr.setter.lexeme.clone());
       let prop_line_info = (expr.setter.line_num, expr.setter.column_start);
 
       if let Some(pos) = self.add_literal_to_pool(prop_name, &expr.setter, false) {
@@ -333,7 +333,7 @@ impl Compiler {
    pub(super) fn compile_object_getter_expr(&mut self, expr: &ObjectGetExprNode) {
       self.compile_node(&expr.target);
 
-      let prop_name = Object::String(expr.getter.lexeme.clone());
+      let prop_name = Object::from(expr.getter.lexeme.clone());
       let prop_line_info = (expr.getter.line_num, expr.getter.column_start);
 
       if let Some(pos) = self.add_literal_to_pool(prop_name, &expr.getter, false) {
@@ -435,7 +435,7 @@ impl Compiler {
             key.lexeme.clone()
          };
 
-         self.add_literal_to_pool(Object::String(name), key, true);
+         self.add_literal_to_pool(Object::from(name), key, true);
          self.compile_node(value);
       }
 

@@ -15,7 +15,7 @@ impl Compiler {
    }
 
    /// Compiles a variable declaration.
-   pub(super) fn compile_variable_decl(&mut self, decl: &VariableDeclNode) {
+   pub(super) fn compile_variable_decl(&mut self, decl: &VariableDeclNode, mode: Option<u8>) {
       // Get the symbol type for the function declaration.
       let s_type = if let CompilerCtx::Class = self.compiler_type {
          SymbolType::VarField
@@ -24,16 +24,28 @@ impl Compiler {
       };
 
       for id in decl.identifiers.iter() {
+         // If we are currently compiling a variable within a class, the constant's name cannot
+         // be 'init', since a class initializer must always be a method.
+         if id.lexeme == "init" && matches!(self.compiler_type, CompilerCtx::Class) {
+            self.error_at_token(
+               id,
+               CompilerErrorType::Syntax,
+               "Field 'init' cannot be a variable.",
+            );
+            return;
+         }
+
          if let Ok(symbol_pos) = self.declare_symbol(id, s_type.clone()) {
             self.compile_node(&decl.value);
 
             // If the compiler is currently compiling a class, append the variable to the class.
             if let CompilerCtx::Class = self.compiler_type {
                if self
-                  .add_literal_to_pool(Object::String(id.lexeme.clone()), id, true)
+                  .add_literal_to_pool(Object::from(id.lexeme.clone()), id, true)
                   .is_some()
                {
-                  self.emit_op_code(OpCode::AppendVarField, (id.line_num, id.column_start));
+                  self.emit_op_code(OpCode::AppendClassField, (id.line_num, id.column_start));
+                  self.emit_raw_byte(mode.unwrap(), (id.line_num, id.column_start));
                }
             }
 
@@ -55,17 +67,28 @@ impl Compiler {
          SymbolType::Const
       };
 
+      // If we are currently compiling a constant within a class, the constant's name cannot
+      // be 'init', since a class initializer must always be a method.
+      if decl.name.lexeme == "init" && matches!(self.compiler_type, CompilerCtx::Class) {
+         self.error_at_token(
+            &decl.name,
+            CompilerErrorType::Syntax,
+            "Field 'init' cannot be a constant.",
+         );
+         return;
+      }
+
       if self.declare_symbol(&decl.name, s_type).is_ok() {
          self.compile_node(&decl.value);
 
          // If the compiler is currently compiling a class, append the variable to the class.
          if let CompilerCtx::Class = self.compiler_type {
             if self
-               .add_literal_to_pool(Object::String(decl.name.lexeme.clone()), &decl.name, true)
+               .add_literal_to_pool(Object::from(decl.name.lexeme.clone()), &decl.name, true)
                .is_some()
             {
                self.emit_op_code(
-                  OpCode::AppendConstField,
+                  OpCode::AppendClassField,
                   (decl.name.line_num, decl.name.column_start),
                );
             }
@@ -79,7 +102,7 @@ impl Compiler {
 
    /// Defines a declaration as global by emitting a `DEFINE_GLOBAL` instructions.
    pub(super) fn define_as_global(&mut self, token: &Token) {
-      if let Some(idx) = self.add_literal_to_pool(Object::String(token.lexeme.clone()), token, false) {
+      if let Some(idx) = self.add_literal_to_pool(Object::from(token.lexeme.clone()), token, false) {
          let pos = (token.line_num, token.column_start);
 
          if idx < 256 {
@@ -275,7 +298,7 @@ impl Compiler {
    /// Compiles a class declaration statement.
    pub(super) fn compile_class_declaration(&mut self, decl: &ClassDeclNode) {
       if self.declare_symbol(&decl.name, SymbolType::Class).is_ok() {
-         let str_name = Object::String(decl.name.lexeme.clone());
+         let str_name = Object::from(decl.name.lexeme.clone());
          let name_line_info = (decl.name.line_num, decl.name.column_start);
 
          // Adds this class to the list of class scopes
@@ -299,17 +322,24 @@ impl Compiler {
             self.emit_op_code_with_short(OpCode::MakeClass, name_pool_pos, name_line_info)
          }
 
-         // Emits the class methods
-         for method in decl.members.iter() {
-            match &method.member_type {
-               ClassMemberDecl::Var(v) => self.compile_variable_decl(v),
-               ClassMemberDecl::Const(c) => self.compile_constant_decl(c),
+         // Emits the class members
+         for member in decl.members.iter() {
+            match &member.member_type {
+               ClassMemberDecl::Var(v) => {
+                  self.compile_variable_decl(v, Some(member.mode));
+               }
+               ClassMemberDecl::Const(c) => {
+                  self.compile_constant_decl(c);
+                  self.emit_raw_byte(member.mode, (c.name.line_num, c.name.column_start));
+               }
                ClassMemberDecl::Method(m) => {
                   if m.name.lexeme == "init" {
                      self.compile_function_decl(m, CompilerCtx::Init)
                   } else {
                      self.compile_function_decl(m, CompilerCtx::Method)
                   }
+
+                  self.emit_raw_byte(member.mode, (m.name.line_num, m.name.column_start));
                }
             }
          }

@@ -218,7 +218,7 @@ impl Compiler {
          ASTNode::Tuple(x) => self.compile_tuple_expr(x),
          ASTNode::Unary(x) => self.compile_unary_expr(x),
          ASTNode::VarReassignment(x) => self.compile_var_reassignment_expr(x),
-         ASTNode::VariableDecl(x) => self.compile_variable_decl(x),
+         ASTNode::VariableDecl(x) => self.compile_variable_decl(x, None),
          ASTNode::WhileStmt(x) => self.compile_while_stmt(x),
       }
    }
@@ -305,9 +305,10 @@ impl Compiler {
    /// Pretty-prints the compiled chunk of bytecode fot the current function.
    #[cfg(feature = "show_bytecode")]
    fn print_pretty_bytecode(&self) {
-      crate::core::bytecode::disassemble_function_scope(
+      crate::core::bytecode::disassemble_func_scope(
          &self.current_func_scope().function.chunk,
          &self.natives,
+         &self.primitives,
          &self.current_func_scope().function.name,
       );
    }

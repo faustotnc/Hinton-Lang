@@ -698,7 +698,7 @@ impl<'a> Parser {
          .replace("\\\"", "\"");
 
       // Emits the constant instruction
-      Object::String(lexeme)
+      Object::from(lexeme)
    }
 
    /// Compiles an integer token to a Hinton Int.

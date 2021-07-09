@@ -6,8 +6,6 @@ use crate::core::chunk::Chunk;
 use crate::core::tokens::Token;
 use crate::errors::CompilerErrorType;
 use crate::objects::{FuncObject, Object};
-use std::cell::RefCell;
-use std::rc::Rc;
 
 impl Compiler {
    /// Compiles a function declaration statement.
@@ -120,7 +118,12 @@ impl Compiler {
 
       if !matches!(t, CompilerCtx::Lambda) {
          if let CompilerCtx::Class = self.compiler_type {
-            self.emit_op_code(OpCode::AppendMethod, func_pos);
+            if self
+               .add_literal_to_pool(Object::from(decl.name.lexeme.clone()), &decl.name, true)
+               .is_some()
+            {
+               self.emit_op_code(OpCode::AppendClassField, func_pos);
+            }
          }
 
          if self.is_global_scope() {
@@ -138,7 +141,7 @@ impl Compiler {
    /// - `up_values`: The UpValues of this function.
    /// - `token`: A reference to the function's token.
    fn emit_function(&mut self, function: FuncObject, up_values: Vec<UpValue>, token: &Token) {
-      let func = Object::Function(Rc::new(RefCell::new(function)));
+      let func = Object::from(function);
       let func_pos = (token.line_num, token.column_start);
 
       // If the function does not close over any values, then there is

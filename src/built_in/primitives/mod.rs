@@ -1,7 +1,8 @@
 use crate::built_in::primitives::int::IntClass;
 use crate::built_in::NativeBoundMethod;
 use crate::errors::RuntimeErrorType;
-use crate::objects::{ClassObject, NativeMethodObj, Object};
+use crate::objects::class_obj::{ClassField, ClassObject};
+use crate::objects::{NativeMethodObj, Object};
 use crate::virtual_machine::RuntimeResult;
 use hashbrown::HashMap;
 use std::cell::RefCell;
@@ -72,7 +73,7 @@ impl Primitives {
    /// ```
    pub fn get_prop_in_class(&self, name: &str, prop: String) -> Result<Object, RuntimeResult> {
       match self.get_class_object(name) {
-         Ok(c) => c.borrow().get(prop),
+         Ok(c) => c.borrow().get_non_static_prop(prop),
          Err(e) => Err(e),
       }
    }
@@ -83,7 +84,10 @@ pub trait HTPrimitive {
    fn name(&self) -> String;
 
    /// Gets the non-static members of this Hinton primitive.
-   fn members(&mut self) -> &mut HashMap<String, Object>;
+   fn members(&mut self) -> &mut HashMap<String, ClassField>;
+
+   /// Gets the static members of this Hinton primitive.
+   fn statics(&mut self) -> &mut HashMap<String, ClassField>;
 
    /// Binds a non-static method to this Hinton primitive.
    ///
@@ -103,13 +107,16 @@ pub trait HTPrimitive {
    ///     // ... Implementation methods ...
    /// }
    ///
-   /// IntClass.bind_method("to_string", (0, 0), int_to_string as NativeBoundMethod);
+   /// IntClass.bind_non_static_method("to_string", (0, 0), int_to_string as NativeBoundMethod);
    /// ```
-   fn bind_method(&mut self, name: &str, arity: (u8, u8), body: NativeBoundMethod) {
+   fn bind_non_static_method(&mut self, name: &str, arity: (u8, u8), body: NativeBoundMethod) {
       let class_name = self.name();
-
-      self.members().insert(
-         name.to_string(),
+      self.bind_field(
+         name,
+         true,
+         false,
+         false,
+         false,
          Object::from(NativeMethodObj {
             class_name,
             method_name: name.to_string(),
@@ -118,6 +125,96 @@ pub trait HTPrimitive {
             max_arity: arity.1,
             body,
          }),
+      );
+   }
+
+   /// Binds a static method to this Hinton primitive.
+   ///
+   /// # Arguments
+   /// * `name`: The name of the method.
+   /// * `arity`: The method's arity.
+   /// * `body`: The method's body.
+   ///
+   /// # Returns:
+   /// ()
+   ///
+   /// # Examples
+   /// ```
+   /// pub type IntClass = ClassObject;
+   ///
+   /// impl HTPrimitive for IntClass {
+   ///     // ... Implementation methods ...
+   /// }
+   ///
+   /// IntClass.bind_static_method("to_string", (0, 0), int_to_string as NativeBoundMethod);
+   /// ```
+   fn bind_static_method(&mut self, name: &str, arity: (u8, u8), body: NativeBoundMethod) {
+      let class_name = self.name();
+      self.bind_field(
+         name,
+         true,
+         true,
+         false,
+         false,
+         Object::from(NativeMethodObj {
+            class_name,
+            method_name: name.to_string(),
+            value: Box::from(Object::Null),
+            min_arity: arity.0,
+            max_arity: arity.1,
+            body,
+         }),
+      );
+   }
+
+   /// Binds a field (static or non-static) to this Hinton primitive.
+   ///
+   /// # Arguments
+   /// * `name`: The name of the field.
+   /// * `p`: Whether this field is public or not.
+   /// * `s`: Whether this field is static or not.
+   /// * `o`:  Whether this field is an override or not.
+   /// * `c`:   Whether this field is constant or not.
+   /// * `value`: The value for this field.
+   ///
+   /// # Returns
+   /// ()
+   ///
+   /// # Examples
+   ///
+   /// ```
+   /// pub type IntClass = ClassObject;
+   ///
+   /// impl HTPrimitive for IntClass {
+   ///     // ... Implementation methods ...
+   /// }
+   ///
+   /// IntClass.bind_field("MAX", false, true, false, true, Object::Int(i64::MAX));
+   /// ```
+   fn bind_field(&mut self, name: &str, p: bool, s: bool, o: bool, c: bool, value: Object) {
+      let mut mode: u8 = 0;
+
+      // Sets the "public" mode bit.
+      if p {
+         mode |= 0b_0000_0100;
+      }
+
+      // Sets the "override" mode bit.
+      if o {
+         mode |= 0b_0000_0010;
+      }
+
+      // Sets the "constant" mode bit.
+      if c {
+         mode |= 0b_0000_0001;
+      }
+
+      if s { self.statics() } else { self.members() }.insert(
+         name.to_string(),
+         ClassField {
+            value: Box::new(value),
+            mode,
+         },
       );
    }
 }

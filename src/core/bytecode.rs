@@ -17,9 +17,7 @@ pub enum OpCode {
    // Although these instructions do not have any bytecode operands, some of them do have object
    // operands from the stack.
    Add,
-   AppendConstField,
-   AppendMethod,
-   AppendVarField,
+   AppendClassField,
    BitwiseAnd,
    BitwiseNot,
    BitwiseOr,
@@ -156,12 +154,7 @@ pub fn print_raw(chunk: &Chunk, name: &str) {
 
 /// Disassembles the chunk, printing each instruction, and its related information.
 #[cfg(feature = "show_bytecode")]
-pub fn disassemble_function_scope(
-   chunk: &Chunk,
-   natives: &Vec<String>,
-   primitives: &Vec<String>,
-   name: &String,
-) {
+pub fn disassemble_func_scope(chunk: &Chunk, natives: &[String], primitives: &[String], name: &str) {
    // prints this chunk's name
    println!("==== {} ====", name);
 
@@ -211,9 +204,6 @@ pub fn disassemble_function_scope(
 
       let op_code_name = match FromPrimitive::from_u8(code).unwrap() {
          OpCode::Add => "ADD",
-         OpCode::AppendConstField => "APPEND_CONST_FIELD",
-         OpCode::AppendMethod => "APPEND_METHOD",
-         OpCode::AppendVarField => "APPEND_VAR_FIELD",
          OpCode::BitwiseAnd => "BIT_AND",
          OpCode::BitwiseNot => "BIT_NOT",
          OpCode::BitwiseOr => "BIT_OR",
@@ -251,6 +241,10 @@ pub fn disassemble_function_scope(
          OpCode::Subtract => "SUBTRACT",
 
          // OpCodes with 1 operand
+         OpCode::AppendClassField => {
+            get_operand(1);
+            "APPEND_CLASS_FIELD"
+         }
          OpCode::BindDefaults => {
             get_operand(1);
             "BIND_DEFAULTS"

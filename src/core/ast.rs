@@ -286,6 +286,7 @@ pub enum ClassMemberDecl {
 #[derive(Clone)]
 pub struct ClassMemberDeclNode {
    pub member_type: ClassMemberDecl,
+   pub mode: u8
 }
 
 #[derive(Clone)]

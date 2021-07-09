@@ -414,12 +414,7 @@ impl Parser {
 
       // Compiles the return expression
       if !self.matches(&SEMICOLON) {
-         let expr = match self.parse_expression() {
-            Some(val) => val,
-            // Report parse error if node has None value
-            None => return None,
-         };
-
+         let expr = self.parse_expression()?;
          self.consume(&SEMICOLON, "Expected a ';' after the expression.");
 
          return Some(ReturnStmt(ReturnStmtNode {
@@ -443,21 +438,33 @@ impl Parser {
       let mut members: Vec<ClassMemberDeclNode> = vec![];
 
       while !self.matches(&TokenType::R_CURLY) {
+         let mut mode = self.capture_field_mode()?;
+
          let member_type = if self.matches(&FUNC_KW) {
             match self.parse_func_declaration() {
-               Some(decl) => ClassMemberDecl::Method(decl),
+               Some(decl) => {
+                  if decl.name.lexeme == "init" {
+                     if (mode & 0b_0000_1000) != 8 {
+                        self.error_at_token(&decl.name, "Class initializer must be public.");
+                        return None;
+                     } else if (mode & 0b_0000_0100) == 4 {
+                        self.error_at_token(&decl.name, "Class initializer cannot be static.");
+                        return None;
+                     } else if (mode & 0b_0000_0010) == 2 {
+                        self.error_at_token(&decl.name, "Cannot override class initializer.");
+                        return None;
+                     }
+                  }
+
+                  ClassMemberDecl::Method(decl)
+               }
                None => return None, // Could not parse method
             }
          } else if self.matches(&VAR_KW) {
-            match self.parse_var_declaration() {
-               Some(decl) => ClassMemberDecl::Var(decl),
-               None => return None, // Could not parse variable field
-            }
+            self.parse_var_declaration().map(ClassMemberDecl::Var)?
          } else if self.matches(&CONST_KW) {
-            match self.parse_const_declaration() {
-               Some(decl) => ClassMemberDecl::Const(decl),
-               None => return None, // Could not parse constant field
-            }
+            mode |= 0b_0000_0001; // Sets the "constant" mode bit.
+            self.parse_const_declaration().map(ClassMemberDecl::Const)?
          } else {
             if self.check(&EOF) {
                self.error_at_current("Unexpected end of file while parsing class body.")
@@ -467,12 +474,87 @@ impl Parser {
             return None;
          };
 
-         members.push(ClassMemberDeclNode { member_type });
+         members.push(ClassMemberDeclNode { member_type, mode });
       }
 
       Some(ClassDecl(ClassDeclNode {
          name,
          members: members.into_boxed_slice(),
       }))
+   }
+
+   /// Computes the modifier settings, or "mode", of a class field.
+   fn capture_field_mode(&mut self) -> Option<u8> {
+      let mut is_public = false;
+      let mut is_static = false;
+      let mut is_override = false;
+
+      // [public, static, override, constant]
+      // [0, 0, 0, 0] = 0  -> (private,    non-static,    non-override,    non-constant)
+      // [0, 0, 0, 1] = 1  -> (private,    non-static,    non-override,    constant)
+      // [0, 0, 1, 0] = 2  -> (private,    non-static,    override,        non-constant)
+      // [0, 0, 1, 1] = 3  -> (private,    non-static,    override,        constant)
+      // [0, 1, 0, 0] = 4  -> (private,    static,        non-override,    non-constant)
+      // [0, 1, 0, 1] = 5  -> (private,    static,        non-override,    constant)
+      // [0, 1, 1, 0] = 6  -> (private,    static,        override,        non-constant)
+      // [0, 1, 1, 1] = 7  -> (private,    static,        override,        constant)
+      // [1, 0, 0, 0] = 8  -> (public,     non-static,    non-override,    non-constant)
+      // [1, 0, 0, 1] = 9  -> (public,     non-static,    non-override,    constant)
+      // [1, 0, 1, 0] = 10 -> (public,     non-static,    override,        non-constant)
+      // [1, 0, 1, 1] = 11 -> (public,     non-static,    override,        constant)
+      // [1, 1, 0, 0] = 12 -> (public,     static,        non-override,    non-constant)
+      // [1, 1, 0, 1] = 13 -> (public,     static,        non-override,    constant)
+      // [1, 1, 1, 0] = 14 -> (public,     static,        override,        non-constant)
+      // [1, 1, 1, 1] = 15 -> (public,     static,        override,        constant)
+      // The `parse_class_declaration` function adds the `constant` mode bit.
+      let mut mode: u8 = 0;
+
+      while self.matches(&PUBLIC_KW) || self.matches(&STATIC_KW) || self.matches(&OVERRIDE_KW) {
+         let tok_type = &self.previous.token_type;
+
+         if matches!(tok_type, TokenType::PUBLIC_KW) {
+            if is_public {
+               self.error_at_previous("Class field already marked as public.");
+               return None;
+            } else if is_static {
+               self.error_at_current("The 'pub' keyword must precede the 'static' keyword.");
+               return None;
+            } else if is_override {
+               self.error_at_current("The 'pub' keyword must precede the 'override' keyword.");
+               return None;
+            }
+
+            is_public = true;
+            mode |= 0b_0000_1000; // Sets the "public" mode bit.
+            continue;
+         }
+
+         if matches!(tok_type, TokenType::STATIC_KW) {
+            if is_static {
+               self.error_at_previous("Class field already marked as static.");
+               return None;
+            } else if is_override {
+               self.error_at_current("The 'static' keyword must precede the 'override' keyword.");
+               return None;
+            }
+
+            is_static = true;
+            mode |= 0b_0000_0100; // Sets the "static" mode bit.
+            continue;
+         }
+
+         if matches!(tok_type, TokenType::OVERRIDE_KW) {
+            if is_override {
+               self.error_at_previous("Class field already marked as override.");
+               return None;
+            }
+
+            is_override = true;
+            mode |= 0b_0000_0010; // Sets the "override" mode bit.
+            continue;
+         }
+      }
+
+      Some(mode)
    }
 }

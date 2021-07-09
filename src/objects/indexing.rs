@@ -149,7 +149,7 @@ fn subscript_string(str: &str, index: &Object) -> Result<Object, ObjectOprErrTyp
 
          if let Some(pos) = to_bounded_index(*idx, chars.len()) {
             if let Some(val) = chars.get(pos) {
-               return Ok(Object::String(val.to_string()));
+               return Ok(Object::from(val.to_string()));
             }
          }
       }
@@ -159,7 +159,7 @@ fn subscript_string(str: &str, index: &Object) -> Result<Object, ObjectOprErrTyp
          let pos = (if *val { 1 } else { 0 }) as usize;
 
          if let Some(val) = chars.get(pos) {
-            return Ok(Object::String(val.to_string()));
+            return Ok(Object::from(val.to_string()));
          }
       }
       // Indexing type: String[Range]
