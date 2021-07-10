@@ -433,6 +433,7 @@ impl VM {
          },
          Object::Int(_) => BuiltIn::primitive_prop(self, value, "Int", prop_name),
          Object::String(_) => BuiltIn::primitive_prop(self, value, "String", prop_name),
+         Object::Array(_) => BuiltIn::primitive_prop(self, value, "Array", prop_name),
          Object::Class(c) => match c.borrow().get_static_prop(prop_name) {
             Ok(val) => self.push_stack(val),
             Err(e) => e,
@@ -571,17 +572,17 @@ impl VM {
          BinaryExprType::BitwiseXOR => val1 ^ val2,
          BinaryExprType::Division => val1 / val2,
          BinaryExprType::Expo => val1.pow(val2),
-         BinaryExprType::LogicEQ => Ok(Object::Bool(val1.equals(&val2))),
+         BinaryExprType::LogicEQ => Ok(Object::Bool(val1 == val2)),
          BinaryExprType::LogicGreaterThan => val1.gt(val2),
          BinaryExprType::LogicGreaterThanEQ => val1.gteq(val2),
          BinaryExprType::LogicLessThan => val1.lt(val2),
          BinaryExprType::LogicLessThanEQ => val1.lteq(val2),
-         BinaryExprType::LogicNotEQ => Ok(Object::Bool(!val1.equals(&val2))),
+         BinaryExprType::LogicNotEQ => Ok(Object::Bool(val1 != val2)),
          BinaryExprType::Minus => val1 - val2,
          BinaryExprType::Modulus => val1 % val2,
          BinaryExprType::Multiplication => val1 * val2,
          BinaryExprType::Nullish => {
-            if val1.is_null() {
+            if matches!(val1, Object::Null) {
                Ok(val2)
             } else {
                Ok(val1)

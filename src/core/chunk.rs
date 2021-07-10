@@ -36,7 +36,7 @@ impl Chunk {
          // look for the object seems very expensive. Can we do better? Do the benefits
          // of storing a single object in the heap outweigh the cost of these operations?
          // TODO: Find a better way of doing this, or do research to see if the benefits outweigh the cost.
-         match self.constants.iter().enumerate().find(|x| x.1.equals(&obj)) {
+         match self.constants.iter().enumerate().find(|x| x.1 == &obj) {
             Some(x) => Ok(x.0 as u16),
             None => {
                self.constants.push(obj);

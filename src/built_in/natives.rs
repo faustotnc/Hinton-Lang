@@ -226,7 +226,7 @@ fn native_assert_eq(vm: &mut VM, args: Vec<Object>) -> RuntimeResult {
    let value1 = args[0].clone();
    let value2 = args[1].clone();
 
-   if value1.equals(&value2) {
+   if value1 == value2 {
       vm.push_stack(Object::Null)
    } else {
       let message = if args.len() == 3 {
@@ -249,7 +249,7 @@ fn native_assert_ne(vm: &mut VM, args: Vec<Object>) -> RuntimeResult {
    let value1 = args[0].clone();
    let value2 = args[1].clone();
 
-   if !value1.equals(&value2) {
+   if value1 != value2 {
       vm.push_stack(Object::Null)
    } else {
       let message = if args.len() == 3 {

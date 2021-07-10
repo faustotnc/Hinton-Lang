@@ -1,5 +1,5 @@
 use crate::errors::ObjectOprErrType;
-use crate::objects::Object;
+use crate::objects::{obj_vectors_equal, Object};
 
 /// Defines negation of Hinton objects.
 impl std::ops::Neg for Object {
@@ -189,7 +189,6 @@ impl std::ops::Div<Object> for Object {
       }
 
       match self {
-         // TODO: Is converting from i64 to f64 a lossy conversion?
          Object::Int(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Float(lhs as f64 / rhs as f64)),
             Object::Float(rhs) => Ok(Object::Float(lhs as f64 / rhs)),
@@ -241,7 +240,6 @@ impl std::ops::Rem<Object> for Object {
       }
 
       match self {
-         // TODO: Is converting from f64 to i64 a lossy conversion?
          Object::Int(lhs) => match rhs {
             Object::Int(rhs) => Ok(Object::Int(lhs % rhs)),
             Object::Float(rhs) => Ok(Object::Int(lhs % rhs.floor() as i64)),
@@ -423,6 +421,125 @@ impl std::ops::Not for Object {
                self.type_name()
             )))
          }
+      }
+   }
+}
+
+/// Defines the equality operation for Hinton objects.
+impl Eq for Object {}
+
+/// Defines the equality operation for Hinton objects.
+impl PartialEq for Object {
+   fn eq(&self, right: &Self) -> bool {
+      match self {
+         Object::Int(i) => match right {
+            Object::Int(x) if i == x => true,
+            Object::Float(x) if (x - *i as f64) == 0f64 => true,
+            Object::Bool(x) if (i == &0i64 && !*x) || (i == &1i64 && *x) => true,
+            _ => false,
+         },
+         Object::Float(f) => match right {
+            Object::Int(x) if (f - *x as f64) == 0f64 => true,
+            Object::Float(x) if f == x => true,
+            Object::Bool(x) if (f == &0f64 && !*x) || (f == &1f64 && *x) => true,
+            _ => false,
+         },
+         Object::Bool(b) => match right {
+            Object::Int(x) if (x == &0i64 && !*b) || (x == &1i64 && *b) => true,
+            Object::Float(x) if (x == &0f64 && !*b) || (x == &1f64 && *b) => true,
+            Object::Bool(x) => !(b ^ x),
+            _ => false,
+         },
+         Object::String(a) => {
+            if let Object::String(s) = right {
+               a == s
+            } else {
+               false
+            }
+         }
+         Object::Array(a) => {
+            if let Object::Array(t) = right {
+               obj_vectors_equal(&a.borrow(), &t.borrow())
+            } else {
+               false
+            }
+         }
+         Object::Tuple(a) => {
+            if let Object::Tuple(t) = right {
+               obj_vectors_equal(a, t)
+            } else {
+               false
+            }
+         }
+         Object::Range(a) => {
+            if let Object::Range(r) = right {
+               // If the ranges match in boundaries,
+               // then they are equal in value.
+               a.min == r.min && a.max == r.max
+            } else {
+               false
+            }
+         }
+         Object::Dict(d1) => {
+            let d1 = d1.borrow();
+
+            if let Object::Dict(d2) = right {
+               let d2 = d2.borrow();
+
+               if d1.len() != d2.len() {
+                  return false;
+               }
+
+               for (key, val_1) in d1.iter() {
+                  // If the current key in d1 does not exist in d2,
+                  // then the dictionaries are not equal.
+                  let val_2 = match d2.get(key) {
+                     Some(v) => v,
+                     None => return false,
+                  };
+
+                  // If the current key's value in d1 does not equal the current
+                  // key's value in d2, then the dictionaries are not equal.
+                  if val_1 != val_2 {
+                     return false;
+                  }
+               }
+
+               true
+            } else {
+               false
+            }
+         }
+         Object::Native(n1) => {
+            if let Object::Native(n2) = right {
+               n1.name == n2.name
+            } else {
+               false
+            }
+         }
+         Object::Function(f1) => {
+            if let Object::Function(f2) = right {
+               std::ptr::eq(&*f1.borrow(), &*f2.borrow())
+            } else {
+               false
+            }
+         }
+         Object::Closure(f1) => {
+            if let Object::Closure(f2) = right {
+               std::ptr::eq(&*f1.function.borrow(), &*f2.function.borrow())
+            } else {
+               false
+            }
+         }
+         Object::Class(c1) => {
+            if let Object::Class(c2) = right {
+               std::ptr::eq(&*c1.borrow(), &*c2.borrow())
+            } else {
+               false
+            }
+         }
+         Object::Null => matches!(right, Object::Null),
+         _ => false,
       }
    }
 }

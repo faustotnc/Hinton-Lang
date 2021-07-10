@@ -176,7 +176,7 @@ impl fmt::Display for InstanceObject {
 }
 
 impl InstanceObject {
-   /// Gets a bound-member property from this class.
+   /// Gets a bound-member property from this instance.
    ///
    /// # Arguments
    /// * `prop_name`: The name of the property.
@@ -218,6 +218,22 @@ impl InstanceObject {
       }
    }
 
+   /// Modifies the value of an existing bound-member property of this instance.
+   ///
+   /// # Arguments
+   /// * `prop_name`: The name of the property to be modified.
+   /// * `val`: The new value to assign to the property.
+   ///
+   /// # Returns:
+   /// Result<Object, RuntimeResult>
+   ///
+   /// # Examples
+   ///
+   /// ```
+   /// let vec_2d = Class::new("Vec2D");
+   /// // ...
+   /// let prop_obj = vec_2d.set_prop("x".to_string(), Object::Int(55i64));
+   /// ```
    pub fn set_prop(&mut self, prop_name: String, val: Object) -> Result<Object, RuntimeResult> {
       match self.members.get_mut(&prop_name) {
          Some(field) => {

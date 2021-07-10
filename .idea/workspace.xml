@@ -19,25 +19,18 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="01377ebb-e361-4782-8382-eca9171c4216" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/src/objects/class_obj.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/built_in/primitives/array.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/built_in/primitives/string.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/built_in/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/built_in/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/built_in/natives.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/built_in/natives.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/built_in/primitives/int.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/built_in/primitives/int.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/built_in/primitives/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/built_in/primitives/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/expressions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/expressions.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/functions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/functions.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/resolver.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/resolver.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/compiler/statements.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/compiler/statements.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/core/ast.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/ast.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/bytecode.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/bytecode.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/core/tokens.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/tokens.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/objects/indexing.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/indexing.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/core/chunk.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/core/chunk.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/objects/class_obj.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/class_obj.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/objects/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/parser/expressions.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/expressions.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/parser/statements.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/parser/statements.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/tests/hinton/test.ht" beforeDir="false" afterPath="$PROJECT_DIR$/src/tests/hinton/test.ht" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/virtual_machine/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/virtual_machine/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/objects/native_operations.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/objects/native_operations.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/virtual_machine/run.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/virtual_machine/run.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -78,7 +71,7 @@
     <option name="directoryName" value="j2k46s8z" />
   </component>
   <component name="ProblemsViewState">
-    <option name="selectedIndex" value="5" />
+    <option name="selectedIndex" value="10" />
   </component>
   <component name="ProjectId" id="1uHRQwqtykRYnoxSAMqKg2FF90E" />
   <component name="ProjectLevelVcsManager">
@@ -113,7 +106,7 @@
     <property name="project.structure.proportion" value="0.0" />
     <property name="project.structure.side.proportion" value="0.0" />
     <property name="run.code.analysis.last.selected.profile" value="pProject Default" />
-    <property name="settings.editor.selected.configurable" value="language.rust.cargo" />
+    <property name="settings.editor.selected.configurable" value="preferences.pluginManager" />
   </component>
   <component name="ReaderModeSettings">
     <option name="showRenderedDocs" value="false" />
@@ -218,7 +211,7 @@
       <workItem from="1625334490569" duration="35000" />
       <workItem from="1625336521311" duration="10846000" />
       <workItem from="1625586078059" duration="69172000" />
-      <workItem from="1625849567301" duration="10925000" />
+      <workItem from="1625849567301" duration="32089000" />
     </task>
     <servers />
   </component>
